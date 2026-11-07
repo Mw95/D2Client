@@ -6,6 +6,7 @@
 #include "CoreArchive.h"
 #include "ui.h"
 #include "inv.h"
+#include "SafeZone.h"
 
 //  ui_panels.cpp -- the in-game UI draw pass of D2Client.dll 1.10: UIPANELS_DrawInGamePanels, which draws the panels, hints, labels and overlays
 //  over the world once a frame, and the helpers it uses (the floating name labels, the one-shot text, the charge-up strip, the death message,
@@ -274,6 +275,9 @@ no_quest_title:
     }
 
 after_title:
+    //  Mod: a safe zone's entry title, held back while the level's own title is on screen (see SafeZone.h).
+    SAFEZONE_UpdateEntryTitle(pPlayerRoom, pPlayerRoom && gLevelEntryFrameCount < 120);
+
     HIREABLES_PanelUpdateHirelingIconsVisible();
 
     if (gUiWindowStates[UI_HIRICONS])

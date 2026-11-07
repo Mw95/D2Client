@@ -6,6 +6,7 @@
 #include "WINMAIN.h"
 #include "CoreArchive.h"
 #include "automap.h"
+#include "SafeZone.h"
 
 //  automap.cpp -- the automap of D2Client.dll 1.10: the mini-map and full-screen map, its settings (kept in the registry under "Diablo II"), the
 //  per-frame reveal around the player, the layer list and the AVL tree of map cells, the explored-map files on disk, the level generator's two
@@ -2285,7 +2286,10 @@ void __cdecl AUTOMAP_DrawLevelName()
     if (!pRoom)
         return;
 
-    pwszLevelName = UI_LevelsGetLevelName(D2COMMON_DUNGEON_GetLevelIdFromRoom(pRoom));
+    //  Mod: inside a safe zone the automap names the zone (see SafeZone.h).
+    pwszLevelName = SAFEZONE_GetAutomapName(pRoom);
+    if (!pwszLevelName)
+        pwszLevelName = UI_LevelsGetLevelName(D2COMMON_DUNGEON_GetLevelIdFromRoom(pRoom));
 
     nY = gnAutomapTextY;
     nTextWidth = D2WIN_10121_GetTextWidth(pwszLevelName);

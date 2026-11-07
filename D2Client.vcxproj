@@ -272,6 +272,7 @@
     <ClCompile Include="Object.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="mods.cpp" />
+    <ClCompile Include="SafeZone.cpp" />
     <ClCompile Include="Monster.cpp" />
     <ClCompile Include="MonUnique.cpp" />
     <ClCompile Include="Gfx.cpp" />
@@ -367,6 +368,7 @@
     <ClInclude Include="text.h" />
     <ClInclude Include="trade.h" />
     <ClInclude Include="ui.h" />
+    <ClInclude Include="SafeZone.h" />
     <ClInclude Include="UnitMode.h" />
     <ClInclude Include="UnitSnd.h" />
     <ClInclude Include="useitem.h" />

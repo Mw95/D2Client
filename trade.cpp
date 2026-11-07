@@ -110,7 +110,9 @@ void __cdecl TRADE_DrawButtonHints()
     if (CUNIT_GetPlayer())
     {
         pRoom = D2COMMON_UNITS_GetRoom(CUNIT_GetPlayer());
-        if (CUNIT_IsPlayerDeadOrMissing() || (pRoom && !D2COMMON_DUNGEON_IsTownLevelId((D2C_Levels)D2COMMON_DUNGEON_GetLevelIdFromRoom(pRoom))))
+        //  Mod: the room's town test instead of the level's, so a trade inside a safe zone stays open (DIFFERENCE from the original, which
+        //  tests DUNGEON_IsTownLevelId of the room's level; without safe zones both answer the same).
+        if (CUNIT_IsPlayerDeadOrMissing() || (pRoom && !D2COMMON_DUNGEON_IsRoomInTown(pRoom)))
         {
             if (UI_GetUiWindowState(UI_MPTRADE))
             {

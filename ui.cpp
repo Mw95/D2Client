@@ -5,6 +5,7 @@
 #include "Game.h"
 #include "CoreArchive.h"
 #include "ui.h"
+#include "SafeZone.h"
 
 //  ui.cpp -- the UI core of D2Client.dll 1.10: the loading screen, the window-state core (UI_SetUIToggle and its readers), the registration of
 //  the panels' input handlers, the gold-entry dialog, a run of small accessors, and the subsystem init and shutdown functions.
@@ -1625,6 +1626,7 @@ void __cdecl UI_ResetUiSubsystems()
         ARCHIVE_CellFileFree(gpImgLevelEntryTitle);
         gpImgLevelEntryTitle = NULL;
     }
+    SAFEZONE_FreeEntryTitle();
     if (gpImgYouDiedHardcore)
     {
         ARCHIVE_CellFileFree(gpImgYouDiedHardcore);
@@ -2020,6 +2022,7 @@ void __cdecl UI_ShutdownUiSubsystems()
         ARCHIVE_CellFileFree(gpImgLevelEntryTitle);
         gpImgLevelEntryTitle = NULL;
     }
+    SAFEZONE_FreeEntryTitle();
 
     CMDTBL_Shutdown();
     ESCMENU_UnloadImages();

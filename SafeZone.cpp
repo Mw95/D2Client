@@ -5,8 +5,7 @@
 #include "CoreArchive.h"
 #include "ui.h"
 #include "SafeZone.h"
-
-#include <tlhelp32.h>
+#include "ModImports.h"
 
 //  SafeZone.cpp -- mod, not part of the original D2Client.dll: the client side of D2MOO's town-like safe zones. See SafeZone.h.
 
@@ -28,26 +27,6 @@ static int32_t sgnTitleFrame = 120;
 static D2CellFileStrc *sgpTitleImage = NULL;
 static bool sgbTitleImageTried = false;
 
-//  The first export of that name found in a loaded module named D2Common.dll (the original D2Common.dll does not have it, the D2MOO one does).
-static FARPROC SAFEZONE_FindD2CommonExport(const char *szExportName)
-{
-    FARPROC pResult = NULL;
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
-    if (hSnapshot == INVALID_HANDLE_VALUE)
-        return NULL;
-
-    MODULEENTRY32W tModule = {};
-    tModule.dwSize = sizeof(tModule);
-    for (BOOL bFound = Module32FirstW(hSnapshot, &tModule); bFound && !pResult; bFound = Module32NextW(hSnapshot, &tModule))
-    {
-        if (!_wcsicmp(tModule.szModule, L"D2Common.dll"))
-            pResult = GetProcAddress(tModule.hModule, szExportName);
-    }
-
-    CloseHandle(hSnapshot);
-    return pResult;
-}
-
 //  Looks the exports up once. They are all or nothing: a D2Common.dll with only some of them is treated as having none.
 static bool SAFEZONE_ResolveExports()
 {
@@ -55,9 +34,9 @@ static bool SAFEZONE_ResolveExports()
     {
         sgbSafeZoneExportsResolved = true;
 
-        SafeZoneGetPresetIdFn pfnGetPresetId = (SafeZoneGetPresetIdFn)SAFEZONE_FindD2CommonExport("DUNGEON_GetSafeZonePresetIdFromRoom");
-        SafeZoneGetEntryNameFn pfnGetEntryName = (SafeZoneGetEntryNameFn)SAFEZONE_FindD2CommonExport("DUNGEON_GetSafeZoneEntryName");
-        SafeZoneGetEntryFileFn pfnGetEntryFile = (SafeZoneGetEntryFileFn)SAFEZONE_FindD2CommonExport("DUNGEON_GetSafeZoneEntryFile");
+        SafeZoneGetPresetIdFn pfnGetPresetId = (SafeZoneGetPresetIdFn)MODIMPORTS_FindD2CommonExport("DUNGEON_GetSafeZonePresetIdFromRoom");
+        SafeZoneGetEntryNameFn pfnGetEntryName = (SafeZoneGetEntryNameFn)MODIMPORTS_FindD2CommonExport("DUNGEON_GetSafeZoneEntryName");
+        SafeZoneGetEntryFileFn pfnGetEntryFile = (SafeZoneGetEntryFileFn)MODIMPORTS_FindD2CommonExport("DUNGEON_GetSafeZoneEntryFile");
         if (pfnGetPresetId && pfnGetEntryName && pfnGetEntryFile)
         {
             sgpfnGetPresetIdFromRoom = pfnGetPresetId;

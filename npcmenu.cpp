@@ -8,6 +8,7 @@
 #include "Game.h"
 #include "CoreArchive.h"
 #include "npcmenu.h"
+#include "CustomNpc.h"
 
 //  The original's __FILE__ for this unit, pushed by every assert and trace that names its file.
 static const char szSourceFile[] = "C:\\projects\\D2\\head\\Diablo2\\Source\\D2Client\\UI\\npcmenu.cpp";
@@ -2386,7 +2387,10 @@ int32_t __fastcall NPCMENU_ChooseNextSpeech(int32_t nContext, int32_t bDismissed
         nDescriptor = -1;
     }
 
-    if ((bDismissed && bDismissedByMouse) || NPCMENU_IsSpeechOnlyNpc((D2C_MonsterIds)sgUIState.NpcClassId) || nDescriptor < 0 || !NPCMENU_NPC_GetActiveNpcUnit() || nDescriptor >= gnNpcMenuDescriptorCount || !gNpcMenuDescriptors[nDescriptor].bEnabled
+    //  Mod: a custom NPC's menu is always enabled (see CustomNpc.h).
+    const bool bCustomMenu = NPCMENU_NPC_GetActiveNpcUnit() && CUSTOMNPC_GetMenuDescriptor(NPCMENU_NPC_GetActiveNpcUnit()->dwClassId);
+    if ((bDismissed && bDismissedByMouse) || NPCMENU_IsSpeechOnlyNpc((D2C_MonsterIds)sgUIState.NpcClassId) || !NPCMENU_NPC_GetActiveNpcUnit()
+        || (!bCustomMenu && (nDescriptor < 0 || nDescriptor >= gnNpcMenuDescriptorCount || !gNpcMenuDescriptors[nDescriptor].bEnabled))
         || (sgUIState.CurrentState = 1, !NPCMENU_NPC_GetActiveNpcUnit()))
     {
         NPCMENU_NpcCloseInteraction();
@@ -3372,7 +3376,8 @@ BOOL __fastcall NPCMENU_TransactionCost(D2UnitStrc *pItem, BOOL bIsOwned, int32_
         //  the record is fetched and dropped
         D2COMMON_DATATBLS_GetItemsTxtRecord(nItemClassId);
 
-        switch (nNpcClassId)
+        //  Mod: a custom NPC acts as the NPC it trades or repairs as (see CustomNpc.h).
+        switch (CUSTOMNPC_GetTransactionClassId(nNpcClassId))
         {
         case MONSTER_CAIN2:
         case MONSTER_CAIN3:
@@ -3404,7 +3409,8 @@ BOOL __fastcall NPCMENU_TransactionCost(D2UnitStrc *pItem, BOOL bIsOwned, int32_
                 }
                 if (!ITEM_NeedsRepair(pItem))
                     return 0;
-                nVendorId = NPCMENU_GetActiveNpcClassId();
+                //  Mod: repair prices of the NPC a custom NPC repairs as, as the server charges them.
+                nVendorId = CUSTOMNPC_GetTransactionClassId(NPCMENU_GetActiveNpcClassId());
                 pQuestRecord = sgUIState.pNpcQuestRecord;
                 nDifficulty = (D2C_Difficulties)GAME_GetDifficulty();
                 nCost = D2COMMON_ITEMS_GetTransactionCost(CUNIT_GetPlayer(), pItem, nDifficulty, pQuestRecord, nVendorId, TRANSACTIONTYPE_REPAIR);
@@ -3477,6 +3483,8 @@ BOOL __fastcall NPCMENU_BeginTransaction(D2UnitStrc *pPlayer, D2UnitStrc *pItem,
 
     if (bRepairAll)
     {
+        //  Mod: a custom NPC repairs as its repair NPC, prices included (see CustomNpc.h).
+        nNpcClassId = CUSTOMNPC_GetTransactionClassId(nNpcClassId);
         switch (nNpcClassId)
         {
         case MONSTER_CHARSI:
@@ -3525,7 +3533,8 @@ BOOL __fastcall NPCMENU_BeginTransaction(D2UnitStrc *pPlayer, D2UnitStrc *pItem,
     }
     else
     {
-        switch (nNpcClassId)
+        //  Mod: a custom NPC acts as the NPC it trades or repairs as (see CustomNpc.h).
+        switch (CUSTOMNPC_GetTransactionClassId(nNpcClassId))
         {
         case MONSTER_CAIN2:
         case MONSTER_CAIN3:
@@ -3551,7 +3560,7 @@ BOOL __fastcall NPCMENU_BeginTransaction(D2UnitStrc *pPlayer, D2UnitStrc *pItem,
                 pQuestRecord = sgUIState.pNpcQuestRecord;
                 sgUIState.Transaction = 3;
                 nDifficulty = (D2C_Difficulties)GAME_GetDifficulty();
-                sgUIState.TransactionCost = D2COMMON_ITEMS_GetTransactionCost(CUNIT_GetPlayer(), pItem, nDifficulty, pQuestRecord, nNpcClassId, TRANSACTIONTYPE_REPAIR);
+                sgUIState.TransactionCost = D2COMMON_ITEMS_GetTransactionCost(CUNIT_GetPlayer(), pItem, nDifficulty, pQuestRecord, CUSTOMNPC_GetTransactionClassId(nNpcClassId), TRANSACTIONTYPE_REPAIR);
                 break;
             }
             //  not in the repair mode: the smith buys, as the traders do (fall through)
@@ -3873,20 +3882,26 @@ void __cdecl NPCMENU_BuildMainMenu(void)
     if (!pNpc)
         return;
 
-    nDescriptor = 0;
-    for (i = 0; i < gnNpcMenuDescriptorCount; ++i)
+    //  Mod: a custom NPC's menu (see CustomNpc.h), else the class's record as the original finds it.
+    pRec = CUSTOMNPC_GetMenuDescriptor(pNpc->dwClassId);
+    if (!pRec)
     {
-        if (gNpcMenuDescriptors[i].nMonsterId == pNpc->dwClassId)
+        nDescriptor = 0;
+        for (i = 0; i < gnNpcMenuDescriptorCount; ++i)
         {
-            nDescriptor = i;
-            break;
+            if (gNpcMenuDescriptors[i].nMonsterId == pNpc->dwClassId)
+            {
+                nDescriptor = i;
+                break;
+            }
         }
+        if (nDescriptor < 0 || nDescriptor >= gnNpcMenuDescriptorCount)
+            return;
+
+        pRec = &gNpcMenuDescriptors[nDescriptor];
     }
-    if (nDescriptor < 0 || nDescriptor >= gnNpcMenuDescriptorCount)
-        return;
 
     sgUIState.CurrentState = 1;
-    pRec = &gNpcMenuDescriptors[nDescriptor];
     for (nRow = 0; nRow < pRec->nRows - 1; ++nRow)
     {
         Unicode wszLine[512];

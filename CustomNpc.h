@@ -5,7 +5,8 @@
 //  and the client behaves as the original. Include it after D2Client.h.
 #pragma once
 
-//  The menu of a custom NPC: Trade (or Trade/Repair with NpcRepair) when it has NpcTrade. NULL for every other class.
+//  The menu of a custom NPC: Talk when it has gossip lines (NpcGossip1..4: Talk plays the next one, then the menu comes back), Trade (or
+//  Trade/Repair with NpcRepair) when it has NpcTrade. NULL for every other class.
 D2NpcMenuDescStrc *__fastcall CUSTOMNPC_GetMenuDescriptor(int32_t nClassId);
 
 //  The class the trade screen's class switches should act as for nClassId: the repair NPC for a custom NPC with NpcRepair (its NpcTrade NPC

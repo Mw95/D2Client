@@ -108,41 +108,103 @@ uint32_t __fastcall ITEMAPPEARANCE_GetDisplayAltGfx(D2UnitStrc *pItem)
 }
 
 
-//  May pPlayer give pItem the look of pDonor? pDonor == pItem asks for the item's own look back.
-D2ItemAppearanceResult __fastcall ITEMAPPEARANCE_CanApply(D2UnitStrc *pPlayer, D2UnitStrc *pItem, D2UnitStrc *pDonor)
+//  The class a row is reserved for (its item type's Class column), or PCLASS_INVALID.
+int32_t __fastcall ITEMAPPEARANCE_GetRecordClass(const D2ItemsTxt *pRecord)
+{
+    int32_t nClass;
+
+    if (!pRecord || pRecord->wType[0] < 0 || pRecord->wType[0] >= sgptDataTables->nItemTypesTxtRecordCount)
+        return PCLASS_INVALID;
+
+    nClass = sgptDataTables->pItemTypesTxt[pRecord->wType[0]].nClass;
+    return nClass < PCLASS_INVALID ? nClass : PCLASS_INVALID;
+}
+
+
+//  Do two rows draw the same? Body armour by its six armour components, everything else by its gfx token. Many exceptional and elite rows
+//  reuse a normal row's graphic.
+BOOL __fastcall ITEMAPPEARANCE_HaveSameGraphic(const D2ItemsTxt *pFirst, const D2ItemsTxt *pSecond)
+{
+    uint32_t dwFirst;
+    uint32_t dwSecond;
+    int32_t i;
+
+    if (!pFirst || !pSecond)
+        return FALSE;
+    if (pFirst == pSecond)
+        return TRUE;
+
+    if (ITEMS_CheckType(pFirst->wType[0], ITEMTYPE_ARMOR))
+    {
+        for (i = 0; i < 6; ++i)
+        {
+            if (pFirst->nArmorComp[i] != pSecond->nArmorComp[i])
+                return FALSE;
+        }
+        return TRUE;
+    }
+
+    dwFirst = pFirst->dwAlternateGfx ? pFirst->dwAlternateGfx : pFirst->dwCode;
+    dwSecond = pSecond->dwAlternateGfx ? pSecond->dwAlternateGfx : pSecond->dwCode;
+    return dwFirst == dwSecond;
+}
+
+
+//  May the row be offered as a look to a player of class nPlayerClass? Drawn on the character, not an expansion base in a classic game, and
+//  not reserved for another class.
+D2ItemAppearanceResult __fastcall ITEMAPPEARANCE_CheckLookRecord(const D2ItemsTxt *pLook, int32_t nPlayerClass, BOOL bExpansion)
+{
+    int32_t nLookClass;
+
+    if (!pLook)
+        return ITEMAPPEARANCE_ERR_INVALID;
+    if (!ITEMAPPEARANCE_RecordHasGraphic(pLook))
+        return ITEMAPPEARANCE_ERR_NO_GRAPHIC;
+    if (!bExpansion && pLook->wVersion >= 100)
+        return ITEMAPPEARANCE_ERR_EXPANSION;
+
+    nLookClass = ITEMAPPEARANCE_GetRecordClass(pLook);
+    if (nLookClass != PCLASS_INVALID && nLookClass != nPlayerClass)
+        return ITEMAPPEARANCE_ERR_CLASS_RESTRICTED;
+
+    return ITEMAPPEARANCE_OK;
+}
+
+
+//  May pPlayer give pItem the look of the row nLookClassId? The item's own row asks for its own look back.
+D2ItemAppearanceResult __fastcall ITEMAPPEARANCE_CanApplyLook(D2UnitStrc *pPlayer, D2UnitStrc *pItem, int32_t nLookClassId)
 {
     D2ItemsTxt *pItemRecord;
-    D2ItemsTxt *pDonorRecord;
-    D2ItemAppearanceResult nShape;
-    int32_t nDonorClass;
+    D2ItemsTxt *pLookRecord;
+    D2ItemAppearanceResult nResult;
 
-    if (!pItem || pItem->dwUnitType != UNIT_ITEM || !pDonor || pDonor->dwUnitType != UNIT_ITEM)
+    if (!pPlayer || pPlayer->dwUnitType != UNIT_PLAYER || !pItem || pItem->dwUnitType != UNIT_ITEM)
         return ITEMAPPEARANCE_ERR_INVALID;
 
     pItemRecord = D2COMMON_DATATBLS_GetItemsTxtRecord((int)pItem->dwClassId);
-    pDonorRecord = D2COMMON_DATATBLS_GetItemsTxtRecord((int)pDonor->dwClassId);
-    if (!pItemRecord || !pDonorRecord)
+    pLookRecord = nLookClassId >= 0 ? D2COMMON_DATATBLS_GetItemsTxtRecord(nLookClassId) : NULL;
+    if (!pItemRecord || !pLookRecord)
         return ITEMAPPEARANCE_ERR_INVALID;
 
     if (!D2COMMON_ITEMS_CheckItemFlag(pItem, IFLAG_IDENTIFIED, __LINE__, __FILE__))
         return ITEMAPPEARANCE_ERR_UNIDENTIFIED;
 
-    if (pItem == pDonor)
+    if (nLookClassId == (int32_t)pItem->dwClassId)
     {
         if (!ITEMAPPEARANCE_RecordHasGraphic(pItemRecord))
             return ITEMAPPEARANCE_ERR_NO_GRAPHIC;
         return ITEMAPPEARANCE_GetStoredClassId(pItem) >= 0 ? ITEMAPPEARANCE_OK : ITEMAPPEARANCE_ERR_SAME_LOOK;
     }
 
-    nShape = ITEMAPPEARANCE_CheckRecords(pItemRecord, pDonorRecord);
-    if (nShape != ITEMAPPEARANCE_OK)
-        return nShape;
+    nResult = ITEMAPPEARANCE_CheckLookRecord(pLookRecord, (int32_t)pPlayer->dwClassId, GAME_IsExpansionGame() != 0);
+    if (nResult != ITEMAPPEARANCE_OK)
+        return nResult;
 
-    nDonorClass = D2COMMON_ITEMS_GetClassOfClassSpecificItem(pDonor);
-    if (nDonorClass != PCLASS_INVALID && (!pPlayer || pPlayer->dwUnitType != UNIT_PLAYER || nDonorClass != (int32_t)pPlayer->dwClassId))
-        return ITEMAPPEARANCE_ERR_CLASS_RESTRICTED;
+    nResult = ITEMAPPEARANCE_CheckRecords(pItemRecord, pLookRecord);
+    if (nResult != ITEMAPPEARANCE_OK)
+        return nResult;
 
-    if (ITEMAPPEARANCE_GetDisplayClassId(pItem) == (int32_t)pDonor->dwClassId)
+    if (ITEMAPPEARANCE_HaveSameGraphic(ITEMAPPEARANCE_GetDisplayRecord(pItem), pLookRecord))
         return ITEMAPPEARANCE_ERR_SAME_LOOK;
 
     return ITEMAPPEARANCE_OK;
@@ -180,11 +242,11 @@ BOOL __fastcall ITEMAPPEARANCE_IsBlacksmith(int32_t nNpcClassId)
 }
 
 
-//  Packet 0x38 as the anvil's other services send it (NPCMENU_SendQuestItemAction), with the donor in the action: 13 bytes, the action, the
-//  NPC's GUID, the item's GUID.
-void __fastcall ITEMAPPEARANCE_SendRequest(D2UnitGUID nNpcGUID, D2UnitGUID nItemGUID, D2UnitGUID nDonorGUID)
+//  Packet 0x38 as the anvil's other services send it (NPCMENU_SendQuestItemAction), with the chosen look's items.txt row in the action: 13
+//  bytes, the action, the NPC's GUID, the item's GUID.
+void __fastcall ITEMAPPEARANCE_SendRequest(D2UnitGUID nNpcGUID, D2UnitGUID nItemGUID, int32_t nLookClassId)
 {
-    const uint32_t nAction = ITEMAPPEARANCE_ACTION_FLAG | ((uint32_t)nDonorGUID & ITEMAPPEARANCE_ACTION_GUID_MASK);
+    const uint32_t nAction = ITEMAPPEARANCE_ACTION_FLAG | ((uint32_t)nLookClassId & ITEMAPPEARANCE_ACTION_LOOK_MASK);
 
     sgUIState.bWaitingForItemMsg = 0;
     MSG_SendCmdUnitParam(0x38, (int32_t)nAction, (int32_t)nNpcGUID, (int32_t)nItemGUID);
@@ -294,7 +356,7 @@ BOOL __fastcall ITEMAPPEARANCE_AnvilAccepts(D2UnitStrc *pPlayer, D2UnitStrc *pCu
     }
 
     pDonor = pCursorItem->dwUnitId == gnItemAppearanceDonorGUID ? pCursorItem : CUNIT_FindUnitByGuidAndType(gnItemAppearanceDonorGUID, UNIT_ITEM);
-    if (ITEMAPPEARANCE_CanApply(pPlayer, pCursorItem, pDonor) != ITEMAPPEARANCE_OK)
+    if (!pDonor || ITEMAPPEARANCE_CanApplyLook(pPlayer, pCursorItem, (int32_t)pDonor->dwClassId) != ITEMAPPEARANCE_OK)
         return FALSE;
 
     nGold = D2COMMON_STATLIST_UnitGetStatValue(pPlayer, STAT_GOLD, 0) + D2COMMON_STATLIST_UnitGetStatValue(pPlayer, STAT_GOLDBANK, 0);

@@ -336,7 +336,10 @@ int32_t __fastcall USEITEM_AnvilOnPanelClick(int32_t nMouseX, int32_t nMouseY)
                 if (gnAnvilPanelMode == ANVIL_PANELMODE_ITEMAPPEARANCE)
                 {
                     //  Item appearance, phase two (ItemAppearance.h).
-                    ITEMAPPEARANCE_SendRequest(sgUIState.NpcUnitGUID, gnAnvilSlotUnitId, gnItemAppearanceDonorGUID);
+                    {
+                        D2UnitStrc *pDonor = CUNIT_FindUnitByGuidAndType(gnItemAppearanceDonorGUID, UNIT_ITEM);
+                        ITEMAPPEARANCE_SendRequest(sgUIState.NpcUnitGUID, gnAnvilSlotUnitId, pDonor ? (int32_t)pDonor->dwClassId : -1);
+                    }
                 }
                 else if (gnAnvilPanelMode)
                 {

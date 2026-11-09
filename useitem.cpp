@@ -6,6 +6,7 @@
 #include "useitem.h"
 #include "npcmenu.h"
 #include "ItemAppearance.h"
+#include "ItemAppearancePicker.h"
 
 //  useitem.cpp -- the Hellforge anvil panel of D2Client.dll 1.10: put an item on the anvil, confirm, and the server answers. Opening and closing
 //  the panel, its two buttons and the item slot, the frame tick, the eight-entry message table and the server packet that drives it.
@@ -84,6 +85,7 @@ static void ANVIL_SwapSlotItem()
 //  Every close path ends in exactly these four steps, in this order.
 static void ANVIL_TeardownPanel()
 {
+    ITEMAPPEARANCE_PickerClose();   //  Item appearance: the look picker goes with the panel (ItemAppearancePicker.h).
     WNDPROC_UnregisterMessageHandlers(D2GFX_WINDOW_GetWindow(), gAnvilMsgHandlers, 8);
     if (gpAnvilDialog)
     {
@@ -232,6 +234,12 @@ void __cdecl USEITEM_AnvilShutdown()
 void __stdcall USEITEM_AnvilOnMouseMove(SMSGHANDLER_PARAMS *pMsg)
 {
     D2WIN_10129_DrawFramedText(NULL, -1, -1, 0, 0);
+    //  Item appearance: the look picker's hover (ItemAppearancePicker.h).
+    if (gbItemAppearancePickerOpen)
+    {
+        ITEMAPPEARANCE_PickerOnMouseMove(pMsg->nXpos, pMsg->nYpos);
+        return;
+    }
     PANEL_BeltHitTestPanel(pMsg);
     if (gnAnvilState == 1)
         INV_AnvilForwardMouseMoveToInventory(pMsg);
@@ -254,6 +262,33 @@ void __cdecl USEITEM_AnvilCloseOnInteractionStop()
 //  It claims the message first and decides afterwards, so a release over the panel never reaches the game underneath. With the item in the
 //  slot it offers the release to the panel and then to the inventory close button; only if both decline, and the state has not become 3 in
 //  the meantime, does the panel close. Otherwise the inventory close button gets first refusal and the panel second.
+//  Item appearance: the picker's "Transmogrify". The look is checked once more, then the panel does what its own confirm does: the wait
+//  dialog, state 3, and the request (ItemAppearance.h). Not part of the original.
+static void ANVIL_ConfirmItemAppearance()
+{
+    D2UnitStrc *pPlayer;
+    D2UnitStrc *pItem;
+    int32_t nLookClassId;
+
+    pPlayer = CUNIT_GetPlayer();
+    pItem = CUNIT_FindUnitByGuidAndType(gnAnvilSlotUnitId, UNIT_ITEM);
+    nLookClassId = ITEMAPPEARANCE_PickerGetSelectedClassId();
+    if (!pItem || ITEMAPPEARANCE_CanApplyLook(pPlayer, pItem, nLookClassId) != ITEMAPPEARANCE_OK || !ITEMAPPEARANCE_CanAfford(pPlayer, pItem, nLookClassId))
+    {
+        SOUNDINST_PlaySound(SOUND_CURSOR_ERROR, NULL, 0, 0, 0);
+        return;
+    }
+
+    ITEMAPPEARANCE_PickerClose();
+    SOUNDINST_PlaySound(SOUND_CURSOR_SELECT, NULL, 0, 0, 0);
+    gpAnvilDialog = DIALOG_Create(150, 130, (DIALOGCALLBACK)USEITEM_NullCallback, NULL, 1, 0, 1, 0, 0, 0, 1);
+    DIALOG_SetHighlight(gpAnvilDialog, 0);
+    DIALOG_AddLine(gpAnvilDialog, D2LANG_GetStringFromTblIndex(STR_IDX_3353_TransactionResults1), 15, 0, 0, 1, NULL, 0);
+    gnAnvilState = 3;
+    ITEMAPPEARANCE_SendRequest(sgUIState.NpcUnitGUID, gnAnvilSlotUnitId, nLookClassId);
+}
+
+
 void __stdcall USEITEM_AnvilOnButtonUp(SMSGHANDLER_PARAMS *pMsg)
 {
     int32_t nMouseX;
@@ -265,6 +300,24 @@ void __stdcall USEITEM_AnvilOnButtonUp(SMSGHANDLER_PARAMS *pMsg)
 
     nMouseX = pMsg->nXpos;
     nMouseY = pMsg->nYpos;
+
+    //  Item appearance: while the look picker is open, it has every click; Back or Esc leave it (ItemAppearancePicker.h).
+    if (gbItemAppearancePickerOpen)
+    {
+        switch (ITEMAPPEARANCE_PickerOnClick(nMouseX, nMouseY))
+        {
+        case ITEMAPPEARANCE_PICKER_CONFIRM:
+            ANVIL_ConfirmItemAppearance();
+            break;
+        case ITEMAPPEARANCE_PICKER_CANCEL:
+            ITEMAPPEARANCE_PickerClose();
+            SOUNDINST_PlaySound(SOUND_CURSOR_PASS, NULL, 0, 0, 0);
+            break;
+        default:
+            break;
+        }
+        return;
+    }
 
     if (gnAnvilState == 2)
     {
@@ -312,17 +365,13 @@ int32_t __fastcall USEITEM_AnvilOnPanelClick(int32_t nMouseX, int32_t nMouseY)
                 if (gnAnvilState != 3)
                     ANVIL_CloseAndNotify();
             }
-            else if (gnAnvilState == 2 && gnAnvilPanelMode == ANVIL_PANELMODE_ITEMAPPEARANCE && !gbItemAppearanceHasDonor)
+            else if (gnAnvilState == 2 && gnAnvilPanelMode == ANVIL_PANELMODE_ITEMAPPEARANCE)
             {
-                //  Item appearance, phase one: the look is chosen. The item goes back to the cursor and the panel waits for the item to change
-                //  (ItemAppearance.h).
-                SOUNDINST_PlaySound(SOUND_CURSOR_SELECT, NULL, 0, 0, 0);
-                gbItemAppearanceHasDonor = 1;
-                gnItemAppearanceDonorGUID = gnAnvilSlotUnitId;
-                gnAnvilState = 1;
-                gnAnvilSlotUnitId = 0;
-                pPlayer = CUNIT_GetPlayer();
-                CURSOR_SetHeldUnit(pPlayer ? D2COMMON_INVENTORY_GetCursorItem(pPlayer->pInventory) : NULL);
+                //  Item appearance: the button opens the look picker over the panel; the item stays in the slot (ItemAppearancePicker.h).
+                if (ITEMAPPEARANCE_PickerOpen(CUNIT_GetPlayer(), CUNIT_FindUnitByGuidAndType(gnAnvilSlotUnitId, UNIT_ITEM)))
+                    SOUNDINST_PlaySound(SOUND_CURSOR_SELECT, NULL, 0, 0, 0);
+                else
+                    SOUNDINST_PlaySound(SOUND_CURSOR_ERROR, NULL, 0, 0, 0);
             }
             else if (gnAnvilState == 2)
             {
@@ -333,15 +382,7 @@ int32_t __fastcall USEITEM_AnvilOnPanelClick(int32_t nMouseX, int32_t nMouseY)
                 DIALOG_AddLine(gpAnvilDialog, pwszResult, 15, 0, 0, 1, NULL, 0);
                 gnAnvilState = 3;
 
-                if (gnAnvilPanelMode == ANVIL_PANELMODE_ITEMAPPEARANCE)
-                {
-                    //  Item appearance, phase two (ItemAppearance.h).
-                    {
-                        D2UnitStrc *pDonor = CUNIT_FindUnitByGuidAndType(gnItemAppearanceDonorGUID, UNIT_ITEM);
-                        ITEMAPPEARANCE_SendRequest(sgUIState.NpcUnitGUID, gnAnvilSlotUnitId, pDonor ? (int32_t)pDonor->dwClassId : -1);
-                    }
-                }
-                else if (gnAnvilPanelMode)
+                if (gnAnvilPanelMode)
                 {
                     NPCMENU_SendQuestItemAction(gnAnvilSlotUnitId);
                 }
@@ -523,6 +564,13 @@ void __cdecl USEITEM_AnvilTickPanel()
 
     USEITEM_AnvilDrawPanel();
 
+    //  Item appearance: the look picker covers the panel and its slot (ItemAppearancePicker.h).
+    if (gbItemAppearancePickerOpen)
+    {
+        ITEMAPPEARANCE_PickerDraw();
+        return;
+    }
+
     if (gnAnvilState != 2)
         return;
 
@@ -647,6 +695,10 @@ void __stdcall USEITEM_AnvilOnButtonDown(SMSGHANDLER_PARAMS *pMsg)
     pMsg->bReturn = 1;
     pMsg->lResult = 0;
     STORM_SMsgBreakHandlerChain(pMsg);
+
+    //  Item appearance: the look picker acts on the release, and nothing under it may take the press (ItemAppearancePicker.h).
+    if (gbItemAppearancePickerOpen)
+        return;
 
     nTicksSinceClick = (int32_t)(GetTickCount() - gdwAnvilLastClickTick);
     if ((uint32_t)nTicksSinceClick < 0x190)

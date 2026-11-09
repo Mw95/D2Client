@@ -10,7 +10,7 @@
 //  The checks mirror D2MOO's D2ItemAppearance.h one for one, so a request the anvil panel lets through is one the server accepts.
 
 
-//  The donor row stored on the item, or -1. The stat sits in the item's base stat list (no state, flag 0x40), the first list
+//  The look row stored on the item, or -1. The stat sits in the item's base stat list (no state, flag 0x40), the first list
 //  ITEMS_SerializeItemComplete writes and the one the client's decoder fills.
 int32_t __fastcall ITEMAPPEARANCE_GetStoredClassId(D2UnitStrc *pItem)
 {
@@ -39,47 +39,47 @@ BOOL __fastcall ITEMAPPEARANCE_RecordHasGraphic(const D2ItemsTxt *pRecord)
 }
 
 
-//  May the row pDonor be drawn in place of the row pItem? The same composit layer, and for weapons the same weapon class one- and
-//  two-handed: the class picks the COF and AnimData record, and the donor's DCCs only exist for its own classes.
-D2ItemAppearanceResult __fastcall ITEMAPPEARANCE_CheckRecords(const D2ItemsTxt *pItem, const D2ItemsTxt *pDonor)
+//  May the row pLook be drawn in place of the row pItem? The same composit layer, and for weapons the same weapon class one- and
+//  two-handed: the class picks the COF and AnimData record, and the look's DCCs only exist for its own classes.
+D2ItemAppearanceResult __fastcall ITEMAPPEARANCE_CheckRecords(const D2ItemsTxt *pItem, const D2ItemsTxt *pLook)
 {
     BOOL bItemIsWeapon;
-    BOOL bDonorIsWeapon;
+    BOOL bLookIsWeapon;
 
-    if (!pItem || !pDonor)
+    if (!pItem || !pLook)
         return ITEMAPPEARANCE_ERR_INVALID;
 
-    if (!ITEMAPPEARANCE_RecordHasGraphic(pItem) || !ITEMAPPEARANCE_RecordHasGraphic(pDonor))
+    if (!ITEMAPPEARANCE_RecordHasGraphic(pItem) || !ITEMAPPEARANCE_RecordHasGraphic(pLook))
         return ITEMAPPEARANCE_ERR_NO_GRAPHIC;
 
-    if (pItem->nComponent != pDonor->nComponent)
+    if (pItem->nComponent != pLook->nComponent)
         return ITEMAPPEARANCE_ERR_SLOT_MISMATCH;
 
     bItemIsWeapon = ITEMS_CheckType(pItem->wType[0], ITEMTYPE_WEAPON) != 0;
-    bDonorIsWeapon = ITEMS_CheckType(pDonor->wType[0], ITEMTYPE_WEAPON) != 0;
-    if (bItemIsWeapon != bDonorIsWeapon)
+    bLookIsWeapon = ITEMS_CheckType(pLook->wType[0], ITEMTYPE_WEAPON) != 0;
+    if (bItemIsWeapon != bLookIsWeapon)
         return ITEMAPPEARANCE_ERR_SLOT_MISMATCH;
 
-    if (bItemIsWeapon && (pItem->dwWeapClass != pDonor->dwWeapClass || pItem->dwWeapClass2Hand != pDonor->dwWeapClass2Hand))
+    if (bItemIsWeapon && (pItem->dwWeapClass != pLook->dwWeapClass || pItem->dwWeapClass2Hand != pLook->dwWeapClass2Hand))
         return ITEMAPPEARANCE_ERR_WEAPON_CLASS;
 
     return ITEMAPPEARANCE_OK;
 }
 
 
-//  The row the item is drawn with: the stored donor while it still fits the item (the txt files may have changed), else its own.
+//  The row the item is drawn with: the stored look while it still fits the item (the txt files may have changed), else its own.
 int32_t __fastcall ITEMAPPEARANCE_GetDisplayClassId(D2UnitStrc *pItem)
 {
-    int32_t nDonorClassId;
+    int32_t nLookClassId;
 
     if (!pItem || pItem->dwUnitType != UNIT_ITEM)
         return -1;
 
-    nDonorClassId = ITEMAPPEARANCE_GetStoredClassId(pItem);
-    if (nDonorClassId >= 0 && nDonorClassId != (int32_t)pItem->dwClassId
-        && ITEMAPPEARANCE_CheckRecords(D2COMMON_DATATBLS_GetItemsTxtRecord((int)pItem->dwClassId), D2COMMON_DATATBLS_GetItemsTxtRecord(nDonorClassId)) == ITEMAPPEARANCE_OK)
+    nLookClassId = ITEMAPPEARANCE_GetStoredClassId(pItem);
+    if (nLookClassId >= 0 && nLookClassId != (int32_t)pItem->dwClassId
+        && ITEMAPPEARANCE_CheckRecords(D2COMMON_DATATBLS_GetItemsTxtRecord((int)pItem->dwClassId), D2COMMON_DATATBLS_GetItemsTxtRecord(nLookClassId)) == ITEMAPPEARANCE_OK)
     {
-        return nDonorClassId;
+        return nLookClassId;
     }
 
     return (int32_t)pItem->dwClassId;
@@ -308,11 +308,11 @@ const Unicode *__fastcall ITEMAPPEARANCE_GetMenuText(void)
 const Unicode *__fastcall ITEMAPPEARANCE_GetAnvilButtonText(void)
 {
     static Unicode wszText[32];
-    return ITEMAPPEARANCE_Widen(wszText, 32, gbItemAppearanceHasDonor ? "Transmogrify" : "Choose this look");
+    return ITEMAPPEARANCE_Widen(wszText, 32, "Choose a look");
 }
 
 
-//  The row's handler: NPCMENU_OnItemServiceClicked with the panel in the appearance mode and no donor yet. 1 for the same reason that handler
+//  The row's handler: NPCMENU_OnItemServiceClicked with the panel in the appearance mode. 1 for the same reason that handler
 //  answers 1 (the dialog it was called from is freed).
 int32_t __cdecl ITEMAPPEARANCE_OnMenuClicked(void)
 {
@@ -327,8 +327,6 @@ int32_t __cdecl ITEMAPPEARANCE_OnMenuClicked(void)
     sgUIState.CurrentState = 7;
     sgUIState.Transaction = 0;
 
-    gbItemAppearanceHasDonor = 0;
-    gnItemAppearanceDonorGUID = 0;
     gnAnvilPanelMode = ANVIL_PANELMODE_ITEMAPPEARANCE;
     gnAnvilNpcGUID = sgUIState.NpcUnitGUID;
     USEITEM_AnvilOpenPanel();
@@ -336,56 +334,33 @@ int32_t __cdecl ITEMAPPEARANCE_OnMenuClicked(void)
 }
 
 
-//  May the item on the cursor go into the slot? Phase one: any item that is drawn on the character and whose look this player may wear.
-//  Phase two: an item the confirmed donor fits (or the donor itself, to restore its own look), and the gold to pay for it.
+//  May the item on the cursor go into the slot? Any identified item that is drawn on the character; whether it has a look to take is known when
+//  the picker opens.
 BOOL __fastcall ITEMAPPEARANCE_AnvilAccepts(D2UnitStrc *pPlayer, D2UnitStrc *pCursorItem)
 {
-    D2UnitStrc *pDonor;
-    int32_t nDonorClass;
-    int32_t nGold;
-
-    if (!pPlayer || !pCursorItem)
+    if (!pPlayer || !pCursorItem || !D2COMMON_ITEMS_CheckItemFlag(pCursorItem, IFLAG_IDENTIFIED, __LINE__, __FILE__))
         return FALSE;
 
-    if (!gbItemAppearanceHasDonor)
-    {
-        if (!ITEMAPPEARANCE_RecordHasGraphic(D2COMMON_DATATBLS_GetItemsTxtRecord((int)pCursorItem->dwClassId)))
-            return FALSE;
-        nDonorClass = D2COMMON_ITEMS_GetClassOfClassSpecificItem(pCursorItem);
-        return nDonorClass == PCLASS_INVALID || nDonorClass == (int32_t)pPlayer->dwClassId;
-    }
-
-    pDonor = pCursorItem->dwUnitId == gnItemAppearanceDonorGUID ? pCursorItem : CUNIT_FindUnitByGuidAndType(gnItemAppearanceDonorGUID, UNIT_ITEM);
-    if (!pDonor || ITEMAPPEARANCE_CanApplyLook(pPlayer, pCursorItem, (int32_t)pDonor->dwClassId) != ITEMAPPEARANCE_OK)
-        return FALSE;
-
-    nGold = D2COMMON_STATLIST_UnitGetStatValue(pPlayer, STAT_GOLD, 0) + D2COMMON_STATLIST_UnitGetStatValue(pPlayer, STAT_GOLDBANK, 0);
-    return nGold >= ITEMAPPEARANCE_GetCost(pCursorItem, pDonor == pCursorItem);
+    return ITEMAPPEARANCE_RecordHasGraphic(D2COMMON_DATATBLS_GetItemsTxtRecord((int)pCursorItem->dwClassId));
 }
 
 
-//  The panel's instruction text for the current phase, with the price once the item to change is in the slot.
+//  Inventory gold and stash gold together, as the server takes them.
+BOOL __fastcall ITEMAPPEARANCE_CanAfford(D2UnitStrc *pPlayer, D2UnitStrc *pItem, int32_t nLookClassId)
+{
+    int32_t nGold;
+
+    if (!pPlayer || !pItem)
+        return FALSE;
+
+    nGold = D2COMMON_STATLIST_UnitGetStatValue(pPlayer, STAT_GOLD, 0) + D2COMMON_STATLIST_UnitGetStatValue(pPlayer, STAT_GOLDBANK, 0);
+    return nGold >= ITEMAPPEARANCE_GetCost(pItem, nLookClassId == (int32_t)pItem->dwClassId);
+}
+
+
+//  The panel's instruction text: what to place, then what the button does.
 void __fastcall ITEMAPPEARANCE_GetAnvilInstruction(Unicode *wszOut, int32_t nCapacity)
 {
-    D2UnitStrc *pItem;
-    char szText[256];
-
-    if (!gbItemAppearanceHasDonor)
-    {
-        ITEMAPPEARANCE_Widen(wszOut, nCapacity, "Place the item whose look you want and press the button.");
-        return;
-    }
-
-    pItem = gnAnvilState == 2 ? CUNIT_FindUnitByGuidAndType(gnAnvilSlotUnitId, UNIT_ITEM) : NULL;
-    if (pItem)
-    {
-        STORM_SStrPrintf(szText, sizeof(szText), "%s: %d gold.",
-                         pItem->dwUnitId == gnItemAppearanceDonorGUID ? "Restore its own look" : "Give it the chosen look",
-                         ITEMAPPEARANCE_GetCost(pItem, pItem->dwUnitId == gnItemAppearanceDonorGUID));
-    }
-    else
-    {
-        STORM_SStrPrintf(szText, sizeof(szText), "Now place the item to change. Place the same item again to restore its own look.");
-    }
-    ITEMAPPEARANCE_Widen(wszOut, nCapacity, szText);
+    ITEMAPPEARANCE_Widen(wszOut, nCapacity, gnAnvilState == 2 ? "Press the button to choose the item's new look."
+                                                              : "Place the item whose look you want to change.");
 }

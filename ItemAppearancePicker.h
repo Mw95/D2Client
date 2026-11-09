@@ -28,3 +28,24 @@ inline D2UnitGUID gnItemAppearancePickerItemGUID;
 int32_t __fastcall ITEMAPPEARANCE_BuildLookList(D2UnitStrc *pPlayer, D2UnitStrc *pItem);
 void __cdecl ITEMAPPEARANCE_FreeLookList(void);
 void __fastcall ITEMAPPEARANCE_GetLookLabel(const D2ItemAppearanceLookStrc *pLook, Unicode *wszOut, int32_t nCapacity);
+
+//  The panel. Coordinates are the 640 x 480 left panel's, as the anvil panel's are.
+inline BOOL gbItemAppearancePickerOpen;
+inline int32_t gnItemAppearancePickerPage;
+inline int32_t gnItemAppearancePickerSelected = -1;
+inline int32_t gnItemAppearancePickerHover = -1;
+
+enum D2ItemAppearancePickerClick
+{
+    ITEMAPPEARANCE_PICKER_NONE = 0,     //  the click hit nothing that acts
+    ITEMAPPEARANCE_PICKER_HANDLED,      //  a look was selected or the page turned
+    ITEMAPPEARANCE_PICKER_CONFIRM,      //  "Transmogrify" with a look selected
+    ITEMAPPEARANCE_PICKER_CANCEL,       //  "Back": the panel closes, the item stays on the anvil
+};
+
+BOOL __fastcall ITEMAPPEARANCE_PickerOpen(D2UnitStrc *pPlayer, D2UnitStrc *pItem);
+void __cdecl ITEMAPPEARANCE_PickerClose(void);
+void __cdecl ITEMAPPEARANCE_PickerDraw(void);
+void __fastcall ITEMAPPEARANCE_PickerOnMouseMove(int32_t nX, int32_t nY);
+D2ItemAppearancePickerClick __fastcall ITEMAPPEARANCE_PickerOnClick(int32_t nX, int32_t nY);
+int32_t __cdecl ITEMAPPEARANCE_PickerGetSelectedClassId(void);

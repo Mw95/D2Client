@@ -5,6 +5,7 @@
 #include "CoreArchive.h"
 #include "Gfx.h"
 #include "GfxUtil.h"
+#include "ItemAppearance.h"
 
 //  GfxUtil.cpp -- the helpers the unit drawing in Gfx.cpp leans on, from D2Client.dll 1.10: which class a shapeshifted unit is drawn as, whose
 //  inventory it is drawn wearing, the cached mode tokens, a unit's cel resolved and measured, the screen cull, which components a unit has,
@@ -577,7 +578,8 @@ int32_t __fastcall GFXUTIL_ResolveUnitAnimIdentity(D2UnitStrc *pUnit, D2GfxDataS
             }
             else
             {
-                pItemsTxt = D2COMMON_DATATBLS_GetItemsTxtRecord(pTorso ? pTorso->dwClassId : -1);
+                //  Item appearance: the armour components of the look the torso item was given (ItemAppearance.h).
+                pItemsTxt = pTorso ? ITEMAPPEARANCE_GetDisplayRecord(pTorso) : D2COMMON_DATATBLS_GetItemsTxtRecord(-1);
                 if (pItemsTxt)
                 {
                     for (iArmor = 0; iArmor < 6; ++iArmor)
@@ -627,7 +629,8 @@ int32_t __fastcall GFXUTIL_ResolveUnitAnimIdentity(D2UnitStrc *pUnit, D2GfxDataS
                         }
                         else
                         {
-                            pItemsTxt = D2COMMON_DATATBLS_GetItemsTxtRecord(pRightHand->dwClassId);
+                            //  Item appearance: the crossbow's look (ItemAppearance.h).
+                            pItemsTxt = ITEMAPPEARANCE_GetDisplayRecord(pRightHand);
                             if (!pItemsTxt)
                                 dwArmorToken = GFXUTIL_Token('l', 'i', 't', ' ');
                             else if (pItemsTxt->dwAlternateGfx)
@@ -652,7 +655,7 @@ int32_t __fastcall GFXUTIL_ResolveUnitAnimIdentity(D2UnitStrc *pUnit, D2GfxDataS
 
                 pGfxData->dwName[2] = dwArmorToken;
                 if (pCompositItem && !dwArmorToken && D2COMMON_ITEMS_CanBeEquipped(pCompositItem))
-                    pGfxData->dwName[2] = D2COMMON_ITEMS_GetAltGfx(pCompositItem);
+                    pGfxData->dwName[2] = ITEMAPPEARANCE_GetDisplayAltGfx(pCompositItem);   //  Item appearance (ItemAppearance.h).
                 else if (!pGfxData->dwName[2])
                     pGfxData->dwName[2] = GFXUTIL_Token('l', 'i', 't', ' ');
             }
@@ -1494,7 +1497,8 @@ uint8_t *__fastcall GFXUTIL_GetComponentColor(D2UnitStrc *pUnit, int32_t nCompon
         return pDefaultPalette;
     }
 
-    if (D2COMMON_ITEMS_GetAltGfx(pItem) == GFXUTIL_Token('l', 'i', 't', ' '))
+    //  Item appearance: the displayed row's graphic; the colour below stays the item's own (ItemAppearance.h).
+    if (ITEMAPPEARANCE_GetDisplayAltGfx(pItem) == GFXUTIL_Token('l', 'i', 't', ' '))
         return NULL;
 
     pPalette = D2COMMON_ITEMS_GetColor(pUnit, pItem, &nColorIndex, 0);

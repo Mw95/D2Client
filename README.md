@@ -43,6 +43,14 @@ Floating-point code compiles for the x87 (`/arch:IA32`), as the original compute
 The DLL is built to stand in for `D2Client.dll` in a Diablo II 1.10 installation. Keep a copy of the original. A
 copy of the game is needed; nothing of Blizzard's is in this repository.
 
+## Additions beyond the original
+
+* **Item appearance (transmog)**. A blacksmith can give an item the look of another base item. Only its graphic on
+  the character changes; stats, colour and weapon class stay its own. This is not in the original DLL and needs
+  the D2MOO side (`D2ItemAppearance.h`, `doc/ItemAppearance.md`) plus the `item_appearance` row in
+  ItemStatCost.txt. The code is in `ItemAppearance.cpp`/`.h`, and every call into it from an original function is
+  commented `Item appearance`.
+
 ## Credits
 
 * [D2MOO](https://github.com/ThePhrozenKeep/D2MOO), the Phrozen Keep community's reconstruction of the 1.10 sources,

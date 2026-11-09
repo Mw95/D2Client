@@ -253,6 +253,7 @@
     <ClCompile Include="spellsel.cpp" />
     <ClCompile Include="SCmd.cpp" />
     <ClCompile Include="Item.cpp" />
+    <ClCompile Include="ItemAppearance.cpp" />
     <ClCompile Include="Listbox.cpp" />
     <ClCompile Include="SkillDesc.cpp" />
     <ClCompile Include="showitems.cpp" />
@@ -323,6 +324,7 @@
     <ClInclude Include="InsertDisc.h" />
     <ClInclude Include="inv.h" />
     <ClInclude Include="Item.h" />
+    <ClInclude Include="ItemAppearance.h" />
     <ClInclude Include="Listbox.h" />
     <ClInclude Include="Lng.h" />
     <ClInclude Include="MemoryPartitions.h" />

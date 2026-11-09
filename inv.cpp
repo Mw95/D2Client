@@ -8,6 +8,7 @@
 #include "npcmenu.h"
 #include "panel.h"
 #include "inv.h"
+#include "ItemAppearance.h"
 
 //  inv.cpp -- the inventory family of D2Client.dll 1.10: the inventory grid, the item description panel, the item name and price text
 //  builders, the shop panel's open, close and release paths, and the message handlers of the mercenary inventory, trade, cube, stash and
@@ -9012,6 +9013,8 @@ static void __fastcall INV_DrawSetItemDescription(D2UnitStrc *pUnit)
         Unicode::strcpy(wszMagicMods, wszSockets);
     }
     MODS_AppendMagicModsText(gpHoverItem, wszMagicMods, 1024, 1, (const Unicode *)NULL);
+    //  Item appearance: the look the item was given, last in the block (ItemAppearance.h).
+    ITEMAPPEARANCE_AppendTooltipText(gpHoverItem, wszMagicMods, 1024);
 
     wszSetBonus[0].ch = 0;
     MODS_AppendSetBonusText(pPlayer, gpHoverItem, wszSetBonus, 512);
@@ -9567,6 +9570,8 @@ void __fastcall INV_DrawItemDescription(D2UnitStrc *pUnit, BOOL bVendorUnit)
     if (D2COMMON_ITEMS_CheckItemTypeId(gpHoverItem, ITEMTYPE_WEAPON) || D2COMMON_ITEMS_CheckItemTypeId(gpHoverItem, ITEMTYPE_ANY_ARMOR))
     {
         INV_AppendEtherealAndSocketsText(gpHoverItem, wszEtherealSockets);
+        //  Item appearance: the look the item was given, last in the block (ItemAppearance.h).
+        ITEMAPPEARANCE_AppendTooltipText(gpHoverItem, wszEtherealSockets, 256);
 
         //  DATATBLS_ApplyRatio(base, percentage, 100), inlined in the bytes with only the !nDivisor test folded away
         nReqDexBonus = 0;

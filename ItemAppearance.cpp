@@ -196,6 +196,9 @@ D2ItemAppearanceResult __fastcall ITEMAPPEARANCE_CanApplyLook(D2UnitStrc *pPlaye
         return ITEMAPPEARANCE_GetStoredClassId(pItem) >= 0 ? ITEMAPPEARANCE_OK : ITEMAPPEARANCE_ERR_SAME_LOOK;
     }
 
+    if (!ITEMAPPEARANCE_IsLookUnlocked(nLookClassId))
+        return ITEMAPPEARANCE_ERR_LOCKED;
+
     nResult = ITEMAPPEARANCE_CheckLookRecord(pLookRecord, (int32_t)pPlayer->dwClassId, GAME_IsExpansionGame() != 0);
     if (nResult != ITEMAPPEARANCE_OK)
         return nResult;
@@ -327,6 +330,8 @@ int32_t __cdecl ITEMAPPEARANCE_OnMenuClicked(void)
     sgUIState.CurrentState = 7;
     sgUIState.Transaction = 0;
 
+    //  The collection is asked for again on every visit; the answer is in before an item can be on the anvil.
+    ITEMAPPEARANCE_RequestCollection(sgUIState.NpcUnitGUID);
     gnAnvilPanelMode = ANVIL_PANELMODE_ITEMAPPEARANCE;
     gnAnvilNpcGUID = sgUIState.NpcUnitGUID;
     USEITEM_AnvilOpenPanel();
@@ -363,4 +368,63 @@ void __fastcall ITEMAPPEARANCE_GetAnvilInstruction(Unicode *wszOut, int32_t nCap
 {
     ITEMAPPEARANCE_Widen(wszOut, nCapacity, gnAnvilState == 2 ? "Press the button to choose the item's new look."
                                                               : "Place the item whose look you want to change.");
+}
+
+
+BOOL __fastcall ITEMAPPEARANCE_IsLookUnlocked(int32_t nClassId)
+{
+    if (nClassId < 0 || nClassId >= ITEMAPPEARANCE_UNLOCK_CHUNKS * 32)
+        return FALSE;
+    return (gaItemAppearanceUnlocked[nClassId / 32] & (1u << (nClassId % 32))) != 0;
+}
+
+
+//  Forgets the mirror and asks the server for the collection (packet 0x38 with the sync action, at the blacksmith).
+void __fastcall ITEMAPPEARANCE_RequestCollection(D2UnitGUID nNpcGUID)
+{
+    D2UnitStrc *pPlayer;
+
+    memset(gaItemAppearanceUnlocked, 0, sizeof(gaItemAppearanceUnlocked));
+    pPlayer = CUNIT_GetPlayer();
+    MSG_SendCmdUnitParam(0x38, (int32_t)ITEMAPPEARANCE_ACTION_SYNC, (int32_t)nNpcGUID, pPlayer ? (int32_t)pPlayer->dwUnitId : -1);
+}
+
+
+//  Called for every chat packet 0x26 before it is shown: the collection's messages are taken here and answer TRUE, so nobody sees them.
+BOOL __fastcall ITEMAPPEARANCE_OnChatMessage(uint8_t nMessageType, const char *szMessage)
+{
+    int32_t nChunk;
+    uint32_t dwBits;
+    const char *pChar;
+    int32_t nDigit;
+
+    if (nMessageType != ITEMAPPEARANCE_CHAT_MESSAGE_TYPE)
+        return FALSE;
+
+    if (!szMessage || szMessage[0] != 'I' || szMessage[1] != 'A')
+        return TRUE;
+
+    nChunk = 0;
+    pChar = szMessage + 2;
+    while (*pChar >= '0' && *pChar <= '9')
+        nChunk = nChunk * 10 + (*pChar++ - '0');
+    if (*pChar++ != ':' || nChunk >= ITEMAPPEARANCE_UNLOCK_CHUNKS)
+        return TRUE;
+
+    dwBits = 0;
+    for (; *pChar; ++pChar)
+    {
+        if (*pChar >= '0' && *pChar <= '9')
+            nDigit = *pChar - '0';
+        else if (*pChar >= 'A' && *pChar <= 'F')
+            nDigit = *pChar - 'A' + 10;
+        else if (*pChar >= 'a' && *pChar <= 'f')
+            nDigit = *pChar - 'a' + 10;
+        else
+            return TRUE;
+        dwBits = (dwBits << 4) | (uint32_t)nDigit;
+    }
+
+    gaItemAppearanceUnlocked[nChunk] = dwBits;
+    return TRUE;
 }

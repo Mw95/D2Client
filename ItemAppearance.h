@@ -14,6 +14,14 @@ constexpr int32_t ITEMAPPEARANCE_RESTORE_COST_PERCENT = 50;
 constexpr uint32_t ITEMAPPEARANCE_ACTION_FLAG = 0x80000000u;
 constexpr uint32_t ITEMAPPEARANCE_ACTION_LOOK_MASK = 0x0000FFFFu;
 
+//  Collection: a look can only be chosen once the character has held an item of that base type. The server keeps the rows (player stat 360)
+//  and sends them on request (packet 0x38 with ITEMAPPEARANCE_ACTION_SYNC) as chat packets 0x26 of type ITEMAPPEARANCE_CHAT_MESSAGE_TYPE,
+//  "IA<chunk>:<8 hex digits>", one per non-empty chunk of 32 rows. gaItemAppearanceUnlocked mirrors them.
+constexpr uint32_t ITEMAPPEARANCE_ACTION_SYNC = 0xC0000000u;
+constexpr uint8_t ITEMAPPEARANCE_CHAT_MESSAGE_TYPE = 0xA7;
+constexpr int32_t ITEMAPPEARANCE_UNLOCK_CHUNKS = 32;
+inline uint32_t gaItemAppearanceUnlocked[ITEMAPPEARANCE_UNLOCK_CHUNKS];
+
 enum D2ItemAppearanceResult
 {
     ITEMAPPEARANCE_OK = 0,
@@ -25,6 +33,7 @@ enum D2ItemAppearanceResult
     ITEMAPPEARANCE_ERR_CLASS_RESTRICTED,
     ITEMAPPEARANCE_ERR_SAME_LOOK,
     ITEMAPPEARANCE_ERR_EXPANSION,
+    ITEMAPPEARANCE_ERR_LOCKED,
 };
 
 //  D2Common exports the original D2Client does not import; D2Common.lib binds them by ordinal like the others.
@@ -58,3 +67,6 @@ BOOL __fastcall ITEMAPPEARANCE_AnvilAccepts(D2UnitStrc *pPlayer, D2UnitStrc *pCu
 void __fastcall ITEMAPPEARANCE_GetAnvilInstruction(Unicode *wszOut, int32_t nCapacity);
 const Unicode *__fastcall ITEMAPPEARANCE_GetAnvilButtonText(void);
 BOOL __fastcall ITEMAPPEARANCE_CanAfford(D2UnitStrc *pPlayer, D2UnitStrc *pItem, int32_t nLookClassId);
+BOOL __fastcall ITEMAPPEARANCE_IsLookUnlocked(int32_t nClassId);
+void __fastcall ITEMAPPEARANCE_RequestCollection(D2UnitGUID nNpcGUID);
+BOOL __fastcall ITEMAPPEARANCE_OnChatMessage(uint8_t nMessageType, const char *szMessage);

@@ -50,6 +50,8 @@ copy of the game is needed; nothing of Blizzard's is in this repository.
   the D2MOO side (`D2ItemAppearance.h`, `doc/ItemAppearance.md`) plus the `item_appearance` row in
   ItemStatCost.txt. The code is in `ItemAppearance.cpp`/`.h`, and every call into it from an original function is
   commented `Item appearance`.
+  On this branch the picker only offers base types the character has held. The server keeps that collection and
+  sends it in hidden chat packets (`ItemAppearance.cpp`, `SCMD_HandleSrv26_ChatMessage`).
 
 ## Credits
 

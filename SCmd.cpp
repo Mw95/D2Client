@@ -15,6 +15,7 @@
 #include "UnitMode.h"
 #include "SCmd.h"
 #include "Cursor.h"
+#include "ItemAppearance.h"
 
 #include <intrin.h>                 // _BitScanReverse, the `bsr` in 0xAC
 
@@ -1882,6 +1883,9 @@ void __fastcall SCMD_HandleSrv26_ChatMessage(D2GSPacketSrv26 *pPacket)
     STORM_SStrCopy((char *)&tChatMessage[offsetof(D2GSPacketSrv26, szName)], szWireName, 16);
     const size_t nNameLen = STORM_SStrLen(szWireName);
     STORM_SStrCopy((char *)&tChatMessage[offsetof(D2GSPacketSrv26, szMessage)], szWireName + nNameLen + 1, 256);
+    //  Item appearance: the collection's messages are not chat (ItemAppearance.h).
+    if (ITEMAPPEARANCE_OnChatMessage(pPacket->nMessageType, (const char *)&tChatMessage[offsetof(D2GSPacketSrv26, szMessage)]))
+        return;
 
     TEXT_HandleChatMessage((D2GSPacketSrv26 *)tChatMessage);
 }

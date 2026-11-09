@@ -31,6 +31,19 @@ struct UnicodeTables
 };
 
 
+//  ---- added equipment slots (DIFFERENCE: not in the original game) ----
+//  The cloak slot, appended after the two weapon-switch body locations so 0..12 keep their values; it must match BODYLOC_CLOAK in D2MOO's
+//  D2Inventory.h. D2Constants.h is generated and still says NUM_BODYLOC = 13, so the extended count lives here. INV_COMP_CLOAK is the
+//  inventory component D2MOO's DATATBLS_GetInventoryComponentGrid serves for it from its side table (inventory.txt columns cloak*).
+constexpr D2C_PlayerBodyLocs BODYLOC_CLOAK = (D2C_PlayerBodyLocs)13;
+constexpr int32_t NUM_BODYLOC_EXTENDED = BODYLOC_CLOAK + 1;
+constexpr int32_t INV_COMP_CLOAK = 10;
+//  The body location after nBodyLoc among the ones whose items are active and shown: the weapon-switch slots are skipped.
+//  The original walks BODYLOC_NONE..BODYLOC_GLOVES; walking with this from BODYLOC_NONE to NUM_BODYLOC_EXTENDED adds BODYLOC_CLOAK.
+constexpr int32_t BODYLOC_NextActive(int32_t nBodyLoc) { return nBodyLoc + 1 == BODYLOC_SWRARM ? BODYLOC_CLOAK : nBodyLoc + 1; }
+static_assert(BODYLOC_SWRARM == 11 && BODYLOC_SWLARM == 12 && NUM_BODYLOC == 13, "the cloak slot is appended after the original body locations");
+
+
 //  ---- rewritten from D2Client.dll ----
 
 //  D2Client.0x6FAA11C0, export ordinal 10004 -- the only export this module gives a name to; 10001, 10002 and 10003 are by ordinal only.

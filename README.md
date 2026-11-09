@@ -22,6 +22,12 @@ the original does.
 * One `.cpp` per unit of the original. Where an assert of the original names its source file, the file is named after
   it; `Shared.cpp` holds the functions no single unit can claim.
 
+## Added equipment slot
+
+This fork deliberately departs from the original in one place: the player has an extra equipment slot, a cloak (body location 13).
+Its code is marked `DIFFERENCE:` (`D2Client.h`, `inv.h`, `inv.cpp`, `Item.cpp`). It needs the matching D2MOO D2Common and D2Game,
+and data changes, which D2MOO's `doc/AddedEquipmentSlots.md` describes.
+
 ## Generated headers
 
 `D2Constants.h`, `D2Structs.h`, `D2Ptrs.h`, `D2Vars.h` and `D2Imports.h` are generated from the reverse-engineering

@@ -2738,7 +2738,7 @@ IN_PANEL:
 
     //  the eleven equipment rects
     nBodyLocHit = -1;
-    for (iBodyLoc = 0; iBodyLoc < 11; ++iBodyLoc)
+    for (iBodyLoc = 0; iBodyLoc < NUM_BODYLOC_EXTENDED; iBodyLoc = BODYLOC_NextActive(iBodyLoc))   //  DIFFERENCE: 0..10, then BODYLOC_CLOAK
     {
         if (nX >= gInvBodyLocRects[iBodyLoc].rect.nLeft && nX <= gInvBodyLocRects[iBodyLoc].rect.nRight && nY >= gInvBodyLocRects[iBodyLoc].rect.nTop && nY <= gInvBodyLocRects[iBodyLoc].rect.nBottom)
         {
@@ -3017,7 +3017,7 @@ IN_PANEL:
     }
 
     nBodyLocHit = -1;
-    for (iBodyLoc = 0; iBodyLoc < 11; ++iBodyLoc)
+    for (iBodyLoc = 0; iBodyLoc < NUM_BODYLOC_EXTENDED; iBodyLoc = BODYLOC_NextActive(iBodyLoc))   //  DIFFERENCE: 0..10, then BODYLOC_CLOAK
     {
         if (nXpos >= gInvBodyLocRects[iBodyLoc].rect.nLeft && nXpos <= gInvBodyLocRects[iBodyLoc].rect.nRight && nYpos >= gInvBodyLocRects[iBodyLoc].rect.nTop && nYpos <= gInvBodyLocRects[iBodyLoc].rect.nBottom)
         {
@@ -5196,6 +5196,38 @@ RIGHT_ARM:
 }
 
 
+//  DIFFERENCE: not in the original game. The frame of the added cloak slot, which the panel art (invchar6) does not have: a dark translucent
+//  fill and a one-pixel outline, drawn under the item. Nothing is drawn while the slot has no rectangle.
+static void INV_DrawCloakSlotFrame(void)
+{
+    static uint8_t nFillColor;
+    static uint8_t nEdgeColor;
+    static int32_t bColorsMixed;
+    const D2InvCompGridStrc *pSlot = &gInvBodyLocRects[BODYLOC_CLOAK];
+    int32_t nWidth;
+    int32_t nHeight;
+
+    nWidth = pSlot->rect.nRight - pSlot->rect.nLeft;
+    nHeight = pSlot->rect.nBottom - pSlot->rect.nTop;
+    if (nWidth <= 2 || nHeight <= 2 || pSlot->rect.nLeft < 0 || pSlot->rect.nTop < 0 || pSlot->rect.nLeft >= gnViewportRight || pSlot->rect.nTop >= gnViewportBottom)
+    {
+        return;
+    }
+
+    if (!bColorsMixed)
+    {
+        nFillColor = D2WIN_10034_MixRGB(0x10u, 0x10u, 0x10u);
+        nEdgeColor = D2WIN_10034_MixRGB(0x60u, 0x58u, 0x48u);
+        bColorsMixed = 1;
+    }
+
+    GFX_DrawFilledRect(pSlot->rect.nLeft, pSlot->rect.nTop, nWidth, nHeight, nFillColor, 1);
+    GFX_DrawFilledRect(pSlot->rect.nLeft, pSlot->rect.nTop, nWidth, 1, nEdgeColor, 5);
+    GFX_DrawFilledRect(pSlot->rect.nLeft, pSlot->rect.nBottom - 1, nWidth, 1, nEdgeColor, 5);
+    GFX_DrawFilledRect(pSlot->rect.nLeft, pSlot->rect.nTop, 1, nHeight, nEdgeColor, 5);
+    GFX_DrawFilledRect(pSlot->rect.nRight - 1, pSlot->rect.nTop, 1, nHeight, nEdgeColor, 5);
+}
+
 //1.10f: D2Client.0x6FAE0A10
 //  Rebuilds the inventory rectangles and grids from inventory.txt, but only when they are stale; seven callers, all on the way into something
 //  that needs a panel rectangle. Two caches with a shared invalidator: a resolution change clears both gbInvLayoutBuilt and gbInvNpcLayoutBuilt,
@@ -5249,6 +5281,8 @@ REBUILD:
     D2COMMON_DATATBLS_GetInventoryComponentGrid(nInvRecordId, gbHighResolution, &gInvBodyLocRects[BODYLOC_BELT], 7);
     D2COMMON_DATATBLS_GetInventoryComponentGrid(nInvRecordId, gbHighResolution, &gInvBodyLocRects[BODYLOC_FEET], 8);
     D2COMMON_DATATBLS_GetInventoryComponentGrid(nInvRecordId, gbHighResolution, &gInvBodyLocRects[BODYLOC_GLOVES], 9);
+    //  DIFFERENCE: the added cloak slot, served by D2MOO from its side table (inventory.txt columns cloak*, or a default left of the helm)
+    D2COMMON_DATATBLS_GetInventoryComponentGrid(nInvRecordId, gbHighResolution, &gInvBodyLocRects[BODYLOC_CLOAK], INV_COMP_CLOAK);
 
     //  record 13 is Hireling, and its ten components land in slots 1..10
     D2COMMON_DATATBLS_GetInventoryRect(13, gbHighResolution, &gInvMercRect);
@@ -11136,6 +11170,8 @@ void __cdecl INV_UpdateAndDrawPanels(void)
         tPanel.nFrame = 0;
         D2GFX_TEXTURE_CelDraw(&tPanel, gInvBodyLocRects[BODYLOC_BELT].rect.nLeft + gnInvBeltEmptyOffsetX, gInvBodyLocRects[BODYLOC_BELT].rect.nBottom + gnInvBeltEmptyOffsetY, 0xFFFFFFFF, 5, NULL);
     }
+    //  DIFFERENCE: the added cloak slot has no frame in the panel art, so one is drawn here
+    INV_DrawCloakSlotFrame();
     if (!D2COMMON_INVENTORY_GetItemFromBodyLoc(pInventory, BODYLOC_FEET))
     {
         tPanel.pCellFile = gpImgInvBoots;
@@ -11391,7 +11427,7 @@ TRADE_PANEL:
     D2COMMON_UNITS_GetInventoryRecordId(pPlayer, INVPAGE_INVENTORY, GAME_IsExpansionGame());
     INV_EnsurePanelLayout();
 
-    //  the equipped items, eleven body locations
+    //  the equipped items, eleven body locations (DIFFERENCE: and the added cloak slot)
     nBodyLoc = 0;
     do
     {
@@ -11529,9 +11565,9 @@ DRAW_ITEM:
         GFX_DrawInventoryItem(pItem, nX, nY);
 
 NEXT_BODYLOC:
-        ++nBodyLoc;
+        nBodyLoc = BODYLOC_NextActive(nBodyLoc);    //  DIFFERENCE: 0..10, then BODYLOC_CLOAK
     }
-    while (nBodyLoc < 11);
+    while (nBodyLoc < NUM_BODYLOC_EXTENDED);
 
     //  the slot under a held item
     if ((sgInventoryMode != 1 || CURSOR_GetMouseX() >= gnScreenWidth / 2) && CURSOR_GetMouseY() < gnScreenHeight - 39)

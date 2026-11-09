@@ -10,7 +10,8 @@
 //  Click handlers for the equipment slots, indexed directly by D2C_PlayerBodyLocs; entry 0 (BODYLOC_NONE) is null.
 //  [4] BODYLOC_RARM is INV_OnBodyLocClickRightArm, [5] BODYLOC_LARM is INV_OnBodyLocClickLeftArm, every other slot is INV_OnBodyLocClickGeneric.
 //  The three handlers are reached only through this table.
-inline int32_t (__fastcall *gBodyLocClickHandlers[11])(D2UnitStrc *, D2InventoryStrc *, D2C_PlayerBodyLocs) =
+//  DIFFERENCE: the original table has 11 entries; it runs to BODYLOC_CLOAK, the weapon-switch slots (never clicked here) null.
+inline int32_t (__fastcall *gBodyLocClickHandlers[NUM_BODYLOC_EXTENDED])(D2UnitStrc *, D2InventoryStrc *, D2C_PlayerBodyLocs) =
 {
     NULL,   //  BODYLOC_NONE
     &INV_OnBodyLocClickGeneric,
@@ -23,8 +24,11 @@ inline int32_t (__fastcall *gBodyLocClickHandlers[11])(D2UnitStrc *, D2Inventory
     &INV_OnBodyLocClickGeneric,
     &INV_OnBodyLocClickGeneric,
     &INV_OnBodyLocClickGeneric,
+    NULL,   //  BODYLOC_SWRARM
+    NULL,   //  BODYLOC_SWLARM
+    &INV_OnBodyLocClickGeneric,     //  BODYLOC_CLOAK
 };
-static_assert(sizeof(gBodyLocClickHandlers) == 44, "gBodyLocClickHandlers: the item's 44 bytes in the .i64");
+static_assert(sizeof(gBodyLocClickHandlers) == 4 * NUM_BODYLOC_EXTENDED, "gBodyLocClickHandlers: the original's 44 bytes plus the added slots");
 
 //  D2Client 0x6FB6EFD0
 //  Where each socket sits inside an item, as (x, y) cell coordinates of 8 bytes per socket. INV_DrawSocketedItems indexes it as
@@ -1353,8 +1357,9 @@ static_assert(sizeof(gbCubeCloseCmdSent) == 4, "gbCubeCloseCmdSent: the item's 4
 //  as left and field 1 as right. DATATBLS_GetInventoryComponentGrid maps inventory.txt components 0..9 (rArm, torso, lArm, head, neck, rHand,
 //  lHand, belt, feet, gloves) onto records 4, 3, 5, 1, 2, 6, 7, 8, 9, 10. The inventory.txt columns rHand and lHand are the ring slots (records
 //  6 and 7, BODYLOC_RRIN and BODYLOC_LRIN); the hands are rArm and lArm, components 0 and 2.
-inline D2InvCompGridStrc gInvBodyLocRects[11];
-static_assert(sizeof(gInvBodyLocRects) == 220, "gInvBodyLocRects: the item's 220 bytes in the .i64");
+//  DIFFERENCE: the original array has 11 entries; it runs to BODYLOC_CLOAK, the weapon-switch entries stay zero.
+inline D2InvCompGridStrc gInvBodyLocRects[NUM_BODYLOC_EXTENDED];
+static_assert(sizeof(gInvBodyLocRects) == 20 * NUM_BODYLOC_EXTENDED, "gInvBodyLocRects: the original's 220 bytes plus the added slots");
 
 //  D2Client 0x6FBB5A38
 //  The hireling panel's equip-slot grids: the same layout as gInvBodyLocRects (11 records of 20 bytes, indexed by D2C_PlayerBodyLocs), for

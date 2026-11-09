@@ -796,9 +796,10 @@ static_assert(offsetof(D2ItemsTxt, dwGemOffset) == 0xF0,
               "ITEM_ApplyGemMods");
 
 //  The eleven body locations both walks cover. The loop is `inc / cmp 0Bh / jl`, so it runs 0..10: BODYLOC_SWRARM is the bound and is not visited.
-#define ITEM_BODYLOC_WALK_COUNT 11
-static_assert(ITEM_BODYLOC_WALK_COUNT == BODYLOC_SWRARM,
-              "the walks stop where the weapon-switch slots begin");
+//  DIFFERENCE: the walks step with BODYLOC_NextActive up to NUM_BODYLOC_EXTENDED, so they visit 0..10 as the original does and then the
+//  added BODYLOC_CLOAK; the weapon-switch slots are still not visited.
+static_assert(BODYLOC_NextActive(BODYLOC_GLOVES) == BODYLOC_CLOAK,
+              "the walks skip the weapon-switch slots");
 
 
 //1.10f: D2Client.0x6FB2B360
@@ -883,7 +884,7 @@ void __fastcall ITEM_RefreshActiveItems(D2UnitStrc *pUnit)
     }
 
     //  2. the body walk: deactivate what no longer qualifies
-    for (int32_t nBodyLoc = BODYLOC_NONE; nBodyLoc < ITEM_BODYLOC_WALK_COUNT; ++nBodyLoc)
+    for (int32_t nBodyLoc = BODYLOC_NONE; nBodyLoc < NUM_BODYLOC_EXTENDED; nBodyLoc = BODYLOC_NextActive(nBodyLoc))
     {
         D2UnitStrc *pItem = D2COMMON_INVENTORY_GetItemFromBodyLoc(pInventory, (D2C_PlayerBodyLocs)nBodyLoc);
         if (!pItem)
@@ -936,7 +937,7 @@ void __fastcall ITEM_RefreshActiveItems(D2UnitStrc *pUnit)
     {
         int32_t bChangedThisPass = 0;
 
-        for (int32_t nBodyLoc = BODYLOC_NONE; nBodyLoc < ITEM_BODYLOC_WALK_COUNT; ++nBodyLoc)
+        for (int32_t nBodyLoc = BODYLOC_NONE; nBodyLoc < NUM_BODYLOC_EXTENDED; nBodyLoc = BODYLOC_NextActive(nBodyLoc))
         {
             D2UnitStrc *pItem = D2COMMON_INVENTORY_GetItemFromBodyLoc(pInventory, (D2C_PlayerBodyLocs)nBodyLoc);
 
@@ -994,7 +995,7 @@ void __fastcall ITEM_RefreshActiveItems(D2UnitStrc *pUnit)
     while (nPassesLeft-- != 0);
 
     //  4. set items on the body, re-applied
-    for (int32_t nBodyLoc = BODYLOC_NONE; nBodyLoc < ITEM_BODYLOC_WALK_COUNT; ++nBodyLoc)
+    for (int32_t nBodyLoc = BODYLOC_NONE; nBodyLoc < NUM_BODYLOC_EXTENDED; nBodyLoc = BODYLOC_NextActive(nBodyLoc))
     {
         D2UnitStrc *pItem = D2COMMON_INVENTORY_GetItemFromBodyLoc(pInventory, (D2C_PlayerBodyLocs)nBodyLoc);
         if (!pItem || D2COMMON_ITEMS_GetItemQuality(pItem) != ITEMQUAL_SET || D2COMMON_ITEMS_CheckItemFlag(pItem, IFLAG_BROKEN, 583, szItemCpp) || D2COMMON_ITEMS_CheckItemFlag(pItem, IFLAG_NOEQUIP, 584, szItemCpp))

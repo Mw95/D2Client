@@ -253,6 +253,7 @@
     <ClCompile Include="spellsel.cpp" />
     <ClCompile Include="SCmd.cpp" />
     <ClCompile Include="Item.cpp" />
+    <ClCompile Include="ItemCompare.cpp" />
     <ClCompile Include="ItemRanges.cpp" />
     <ClCompile Include="Listbox.cpp" />
     <ClCompile Include="SkillDesc.cpp" />
@@ -324,6 +325,7 @@
     <ClInclude Include="InsertDisc.h" />
     <ClInclude Include="inv.h" />
     <ClInclude Include="Item.h" />
+    <ClInclude Include="ItemCompare.h" />
     <ClInclude Include="ItemRanges.h" />
     <ClInclude Include="Qol.h" />
     <ClInclude Include="Listbox.h" />

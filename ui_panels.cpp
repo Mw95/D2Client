@@ -6,6 +6,7 @@
 #include "CoreArchive.h"
 #include "ui.h"
 #include "inv.h"
+#include "ItemCompare.h"
 
 //  ui_panels.cpp -- the in-game UI draw pass of D2Client.dll 1.10: UIPANELS_DrawInGamePanels, which draws the panels, hints, labels and overlays
 //  over the world once a frame, and the helpers it uses (the floating name labels, the one-shot text, the charge-up strip, the death message,
@@ -382,6 +383,7 @@ after_title:
 
     PANEL_DrawHostileIndicator();
     TEXT_TickStaticInfoPanel(pState);
+    ITEMCOMPARE_DrawPending();     //  QOL: the equipped items' tooltips, under the hovered one D2WIN_10124 draws
     D2WIN_10124();
 
     //  The two label lines under a selected monster. Line 2 first, then line 1 above it, and line 1 is coloured by rank.

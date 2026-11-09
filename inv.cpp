@@ -9,6 +9,7 @@
 #include "panel.h"
 #include "inv.h"
 #include "ItemRanges.h"
+#include "ItemCompare.h"
 
 //  inv.cpp -- the inventory family of D2Client.dll 1.10: the inventory grid, the item description panel, the item name and price text
 //  builders, the shop panel's open, close and release paths, and the message handlers of the mercenary inventory, trade, cube, stash and
@@ -8759,6 +8760,16 @@ static void __fastcall INV_AppendSocketFillerText(Unicode *wszOut)
 }
 
 
+//  QOL: the one draw of an item description's text, in every arm. ItemCompare.cpp takes the text when it is building an equipped item's
+//  tooltip, and remembers it otherwise as the hovered item's; the original calls D2WIN_10129_DrawFramedText at each of these sites.
+static void __fastcall INV_DrawDescriptionFrame(const Unicode *wszText, int32_t nX, int32_t nY, int32_t nColor, int32_t nAlign)
+{
+    if (ITEMCOMPARE_OnDescriptionText(wszText, nX, nY, nColor, nAlign))
+        return;
+    D2WIN_10129_DrawFramedText(wszText, nX, nY, nColor, nAlign);
+}
+
+
 //  A tome's description: inv.cpp lines 3308 and 3312, inlined once in the original. The quantity, two usage hints when no panel mode is set, and
 //  the name, drawn left-aligned, which no other arm does.
 static void __fastcall INV_DrawBookDescription(void)
@@ -8811,10 +8822,10 @@ static void __fastcall INV_DrawBookDescription(void)
     D2WIN_10131_GetTextDimensions(wszOut, &nWidth, &nHeight);
     if (gnDescPopupY - nHeight > 0)
     {
-        D2WIN_10129_DrawFramedText(wszOut, gnDescPopupX, gnDescPopupY, 0, 0);
+        INV_DrawDescriptionFrame(wszOut, gnDescPopupX, gnDescPopupY, 0, 0);
         return;
     }
-    D2WIN_10129_DrawFramedText(wszOut, gnDescPopupAltX, (gnDescPopupBottomY + nHeight), 0, 0);
+    INV_DrawDescriptionFrame(wszOut, gnDescPopupAltX, (gnDescPopupBottomY + nHeight), 0, 0);
 }
 
 
@@ -9112,10 +9123,10 @@ static void __fastcall INV_DrawSetItemDescription(D2UnitStrc *pUnit)
     D2WIN_10131_GetTextDimensions(wszPopup, &nWidth, &nHeight);
     if (gnDescPopupY - nHeight > 0)
     {
-        D2WIN_10129_DrawFramedText(wszPopup, gnDescPopupX, gnDescPopupY, 0, 1);
+        INV_DrawDescriptionFrame(wszPopup, gnDescPopupX, gnDescPopupY, 0, 1);
         return;
     }
-    D2WIN_10129_DrawFramedText(wszPopup, gnDescPopupAltX, (gnDescPopupBottomY + nHeight), 0, 1);
+    INV_DrawDescriptionFrame(wszPopup, gnDescPopupAltX, (gnDescPopupBottomY + nHeight), 0, 1);
 }
 
 
@@ -9180,10 +9191,10 @@ static void __fastcall INV_DrawTransmogrifyDescription(void)
     D2WIN_10131_GetTextDimensions(wszOut, &nWidth, &nHeight);
     if (gnDescPopupY - nHeight > 0)
     {
-        D2WIN_10129_DrawFramedText(wszOut, gnDescPopupX, gnDescPopupY, 0, 0);
+        INV_DrawDescriptionFrame(wszOut, gnDescPopupX, gnDescPopupY, 0, 0);
         return;
     }
-    D2WIN_10129_DrawFramedText(wszOut, gnDescPopupAltX, (gnDescPopupBottomY + nHeight), 0, 0);
+    INV_DrawDescriptionFrame(wszOut, gnDescPopupAltX, (gnDescPopupBottomY + nHeight), 0, 0);
 }
 
 
@@ -9438,10 +9449,10 @@ void __fastcall INV_DrawItemDescription(D2UnitStrc *pUnit, BOOL bVendorUnit)
         D2WIN_10131_GetTextDimensions(wszPopupText, &nWidth, &nHeight);
         if (gnDescPopupY - nHeight > 0)
         {
-            D2WIN_10129_DrawFramedText(wszPopupText, gnDescPopupX, gnDescPopupY, 0, 1);
+            INV_DrawDescriptionFrame(wszPopupText, gnDescPopupX, gnDescPopupY, 0, 1);
             return;
         }
-        D2WIN_10129_DrawFramedText(wszPopupText, gnDescPopupAltX, (gnDescPopupBottomY + nHeight), 0, 1);
+        INV_DrawDescriptionFrame(wszPopupText, gnDescPopupAltX, (gnDescPopupBottomY + nHeight), 0, 1);
         return;
     }
 
@@ -9786,10 +9797,10 @@ void __fastcall INV_DrawItemDescription(D2UnitStrc *pUnit, BOOL bVendorUnit)
     D2WIN_10131_GetTextDimensions(wszPopupText, &nWidth, &nHeight);
     if (gnDescPopupY - nHeight > 0)
     {
-        D2WIN_10129_DrawFramedText(wszPopupText, gnDescPopupX, gnDescPopupY, nDrawColor, 1);
+        INV_DrawDescriptionFrame(wszPopupText, gnDescPopupX, gnDescPopupY, nDrawColor, 1);
         return;
     }
-    D2WIN_10129_DrawFramedText(wszPopupText, gnDescPopupAltX, (gnDescPopupBottomY + nHeight), nDrawColor, 1);
+    INV_DrawDescriptionFrame(wszPopupText, gnDescPopupAltX, (gnDescPopupBottomY + nHeight), nDrawColor, 1);
 }
 
 //  The description's last two callees in this unit: the damage lines (0x6FAE43D0, 2159 bytes) and the price footer (0x6FAE5A40, 399 bytes).
@@ -10584,6 +10595,7 @@ void __cdecl INV_MercInvDrawPanel(void)
 
     INV_MercInvDrawSlotHighlights(pMerc);
     INV_DrawItemDescription(pMerc, FALSE);
+    ITEMCOMPARE_AfterDescription(pMerc);    //  QOL: the equipped items beside the hovered one
 }
 
 //1.10f: D2Client.0x6FAE97C0
@@ -11696,6 +11708,7 @@ NEXT_BODYLOC:
         }
     }
     INV_DrawItemDescription(pDescUnit, bUseHireling);
+    ITEMCOMPARE_AfterDescription(pDescUnit);    //  QOL: the equipped items beside the hovered one
 }
 
 //  Three functions of this unit (0x6FAEC510, 0x6FAEC6C0 and 0x6FAECF90) whose only caller is in another unit: TRADE_HandleStateMessage ends three of

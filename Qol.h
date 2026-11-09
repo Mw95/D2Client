@@ -16,6 +16,10 @@ enum D2ClientQolMode : int32_t
 inline int32_t gnQolStatRangesMode = QOLMODE_ALWAYS;
 inline int32_t gnQolStatRangesKey = VK_SHIFT;
 
+//  The equipped item's description shown beside the hovered item's, ItemCompare.cpp.
+inline int32_t gnQolItemCompareMode = QOLMODE_ALWAYS;
+inline int32_t gnQolItemCompareKey = VK_SHIFT;
+
 //  TRUE when a feature with this mode and key is to be shown now.
 inline BOOL QOL_IsModeActive(int32_t nMode, int32_t nVirtualKey)
 {

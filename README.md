@@ -35,6 +35,12 @@ to the original's units is marked `QOL:`.
   A crafted item's recipe properties get ranges only when D2MOO's D2Game made it and `itemstatcost.txt` has the row for
   `STAT_D2MOO_ITEM_CRAFTRECIPE` (id 359, Save Bits 14, no description).
 
+* **Equipped-item compare** (`ItemCompare.cpp`, `gnQolItemCompareMode`, default on): hovering an item that is not worn
+  shows, beside its tooltip, the tooltips of what is worn where it would go, each headed "Equipped" -- both rings for a
+  ring, weapon and shield for a two-handed weapon. It compares with the player's gear, or the mercenary's while the
+  mercenary panel is open, in the inventory, stash, cube, shop and trade window. The tooltips go side by side, or stacked
+  when that does not fit, or not at all when neither fits.
+
 ## Generated headers
 
 `D2Constants.h`, `D2Structs.h`, `D2Ptrs.h`, `D2Vars.h` and `D2Imports.h` are generated from the reverse-engineering

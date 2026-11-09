@@ -254,6 +254,7 @@
     <ClCompile Include="SCmd.cpp" />
     <ClCompile Include="Item.cpp" />
     <ClCompile Include="ItemAppearance.cpp" />
+    <ClCompile Include="ItemAppearancePicker.cpp" />
     <ClCompile Include="Listbox.cpp" />
     <ClCompile Include="SkillDesc.cpp" />
     <ClCompile Include="showitems.cpp" />
@@ -325,6 +326,7 @@
     <ClInclude Include="inv.h" />
     <ClInclude Include="Item.h" />
     <ClInclude Include="ItemAppearance.h" />
+    <ClInclude Include="ItemAppearancePicker.h" />
     <ClInclude Include="Listbox.h" />
     <ClInclude Include="Lng.h" />
     <ClInclude Include="MemoryPartitions.h" />

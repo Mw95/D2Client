@@ -4,6 +4,8 @@
 #include "D2Client.h"
 #include "CoreArchive.h"
 #include "useitem.h"
+#include "npcmenu.h"
+#include "ItemAppearance.h"
 
 //  useitem.cpp -- the Hellforge anvil panel of D2Client.dll 1.10: put an item on the anvil, confirm, and the server answers. Opening and closing
 //  the panel, its two buttons and the item slot, the frame tick, the eight-entry message table and the server packet that drives it.
@@ -310,6 +312,18 @@ int32_t __fastcall USEITEM_AnvilOnPanelClick(int32_t nMouseX, int32_t nMouseY)
                 if (gnAnvilState != 3)
                     ANVIL_CloseAndNotify();
             }
+            else if (gnAnvilState == 2 && gnAnvilPanelMode == ANVIL_PANELMODE_ITEMAPPEARANCE && !gbItemAppearanceHasDonor)
+            {
+                //  Item appearance, phase one: the look is chosen. The item goes back to the cursor and the panel waits for the item to change
+                //  (ItemAppearance.h).
+                SOUNDINST_PlaySound(SOUND_CURSOR_SELECT, NULL, 0, 0, 0);
+                gbItemAppearanceHasDonor = 1;
+                gnItemAppearanceDonorGUID = gnAnvilSlotUnitId;
+                gnAnvilState = 1;
+                gnAnvilSlotUnitId = 0;
+                pPlayer = CUNIT_GetPlayer();
+                CURSOR_SetHeldUnit(pPlayer ? D2COMMON_INVENTORY_GetCursorItem(pPlayer->pInventory) : NULL);
+            }
             else if (gnAnvilState == 2)
             {
                 SOUNDINST_PlaySound(SOUND_CURSOR_SELECT, NULL, 0, 0, 0);
@@ -319,7 +333,12 @@ int32_t __fastcall USEITEM_AnvilOnPanelClick(int32_t nMouseX, int32_t nMouseY)
                 DIALOG_AddLine(gpAnvilDialog, pwszResult, 15, 0, 0, 1, NULL, 0);
                 gnAnvilState = 3;
 
-                if (gnAnvilPanelMode)
+                if (gnAnvilPanelMode == ANVIL_PANELMODE_ITEMAPPEARANCE)
+                {
+                    //  Item appearance, phase two (ItemAppearance.h).
+                    ITEMAPPEARANCE_SendRequest(sgUIState.NpcUnitGUID, gnAnvilSlotUnitId, gnItemAppearanceDonorGUID);
+                }
+                else if (gnAnvilPanelMode)
                 {
                     NPCMENU_SendQuestItemAction(gnAnvilSlotUnitId);
                 }
@@ -662,7 +681,16 @@ void __stdcall USEITEM_AnvilOnButtonDown(SMSGHANDLER_PARAMS *pMsg)
         return;
     }
 
-    if (gnAnvilPanelMode == 1)
+    //  Item appearance: the panel's own mode, with its two phases (ItemAppearance.h).
+    if (gnAnvilPanelMode == ANVIL_PANELMODE_ITEMAPPEARANCE)
+    {
+        if (!ITEMAPPEARANCE_AnvilAccepts(pPlayer, pCursorItem))
+        {
+            SOUNDINST_PlaySound(SOUND_CURSOR_ERROR, NULL, 0, 0, 0);
+            return;
+        }
+    }
+    else if (gnAnvilPanelMode == 1)
     {
         if ((NPCMENU_NpcGetVendorClassId() != 154 || !D2COMMON_ITEMS_IsImbueable(pCursorItem)) && (NPCMENU_NpcGetVendorClassId() != 511 || !D2COMMON_ITEMS_IsSocketable(pCursorItem))
             && (NPCMENU_NpcGetVendorClassId() != 512 || !D2COMMON_ITEMS_IsPersonalizable(pCursorItem)))
@@ -729,7 +757,8 @@ void __cdecl USEITEM_AnvilDrawPanel()
 
     nPrevFont = D2WIN_10127_SetFont(D2FONT_FONT16);
 
-    if ((uint32_t)gnAnvilPanelMode <= 1)
+    //  Item appearance: its mode (2) draws as mode 1 does, with its own texts (ItemAppearance.h).
+    if ((uint32_t)gnAnvilPanelMode <= (uint32_t)ANVIL_PANELMODE_ITEMAPPEARANCE)
     {
         memset(&pData, 0, sizeof(pData));
         pData.nDirection = 0;
@@ -772,6 +801,8 @@ void __cdecl USEITEM_AnvilDrawPanel()
                 }
 
                 pwszText = D2LANG_GetStringFromTblIndex(nLabelStrId);
+                if (gnAnvilPanelMode == ANVIL_PANELMODE_ITEMAPPEARANCE && gAnvilPanelButtons[i].wLabelStrId == STR_IDX_4017_Upgrade)
+                    pwszText = ITEMAPPEARANCE_GetAnvilButtonText();
                 nTextWidth = D2WIN_10121_GetTextWidth(pwszText);
                 nBoxHeight = D2WIN_10125() + 6;
                 nLineHeight = D2WIN_10125();
@@ -781,7 +812,7 @@ void __cdecl USEITEM_AnvilDrawPanel()
             }
         }
 
-        if (gnAnvilPanelMode == 1)
+        if (gnAnvilPanelMode == 1 || gnAnvilPanelMode == ANVIL_PANELMODE_ITEMAPPEARANCE)
         {
             nInstructStrId = STR_IDX_10076_upgraderestrictEx;
             if (NPCMENU_NpcGetVendorClassId() == 511)
@@ -790,6 +821,13 @@ void __cdecl USEITEM_AnvilDrawPanel()
                 nInstructStrId = STR_IDX_22747_Rename_Instruct;
 
             pwszText = D2LANG_GetStringFromTblIndex(nInstructStrId);
+            if (gnAnvilPanelMode == ANVIL_PANELMODE_ITEMAPPEARANCE)
+            {
+                //  Item appearance: the phase's instruction (ItemAppearance.h).
+                static Unicode wszAppearanceInstruction[256];
+                ITEMAPPEARANCE_GetAnvilInstruction(wszAppearanceInstruction, 256);
+                pwszText = wszAppearanceInstruction;
+            }
             pSplitText = D2WIN_10199(pwszText, &pLines, 300);
             //  D2ExpRes QuestImbueInscribeSocketStrings1 (0x85737) lands on the `jz` this test compiles to.
             if (pSplitText)

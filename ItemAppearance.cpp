@@ -3,6 +3,7 @@
 #include "DLLmain.h"
 #include "D2Client.h"
 #include "npcmenu.h"
+#include "useitem.h"
 #include "ItemAppearance.h"
 
 //  ItemAppearance.cpp -- item appearance ("transmog"), the client's side. Not part of the original D2Client.dll; see ItemAppearance.h.
@@ -223,4 +224,106 @@ void __fastcall ITEMAPPEARANCE_AppendTooltipText(D2UnitStrc *pItem, Unicode *wsz
 
     if (Unicode::strlen(wszOut) + Unicode::strlen(wszLine) < nCapacity)
         Unicode::strcat(wszOut, wszLine);
+}
+
+
+//  Text of this feature. The game's string tables have none for it, so it is English and built here.
+static const Unicode *ITEMAPPEARANCE_Widen(Unicode *wszBuffer, int32_t nCapacity, const char *szText)
+{
+    Unicode::win2Unicode(wszBuffer, szText, nCapacity - 1);
+    return wszBuffer;
+}
+
+
+//  The blacksmiths' main-menu row, added by NPCMENU_BuildMainMenu.
+const Unicode *__fastcall ITEMAPPEARANCE_GetMenuText(void)
+{
+    static Unicode wszText[32];
+    return ITEMAPPEARANCE_Widen(wszText, 32, "Transmogrify");
+}
+
+
+const Unicode *__fastcall ITEMAPPEARANCE_GetAnvilButtonText(void)
+{
+    static Unicode wszText[32];
+    return ITEMAPPEARANCE_Widen(wszText, 32, gbItemAppearanceHasDonor ? "Transmogrify" : "Choose this look");
+}
+
+
+//  The row's handler: NPCMENU_OnItemServiceClicked with the panel in the appearance mode and no donor yet. 1 for the same reason that handler
+//  answers 1 (the dialog it was called from is freed).
+int32_t __cdecl ITEMAPPEARANCE_OnMenuClicked(void)
+{
+    if (sgUIState.hDialogMainMenu)
+    {
+        DIALOG_Close(sgUIState.hDialogMainMenu);
+        sgUIState.hDialogMainMenu = NULL;
+    }
+    UI_SetUIToggle(UI_NPCMENU, UI_TURNOFF, 0);
+    UI_ArmPanelToggleDelay();
+    INV_ResetItemDescState();
+    sgUIState.CurrentState = 7;
+    sgUIState.Transaction = 0;
+
+    gbItemAppearanceHasDonor = 0;
+    gnItemAppearanceDonorGUID = 0;
+    gnAnvilPanelMode = ANVIL_PANELMODE_ITEMAPPEARANCE;
+    gnAnvilNpcGUID = sgUIState.NpcUnitGUID;
+    USEITEM_AnvilOpenPanel();
+    return 1;
+}
+
+
+//  May the item on the cursor go into the slot? Phase one: any item that is drawn on the character and whose look this player may wear.
+//  Phase two: an item the confirmed donor fits (or the donor itself, to restore its own look), and the gold to pay for it.
+BOOL __fastcall ITEMAPPEARANCE_AnvilAccepts(D2UnitStrc *pPlayer, D2UnitStrc *pCursorItem)
+{
+    D2UnitStrc *pDonor;
+    int32_t nDonorClass;
+    int32_t nGold;
+
+    if (!pPlayer || !pCursorItem)
+        return FALSE;
+
+    if (!gbItemAppearanceHasDonor)
+    {
+        if (!ITEMAPPEARANCE_RecordHasGraphic(D2COMMON_DATATBLS_GetItemsTxtRecord((int)pCursorItem->dwClassId)))
+            return FALSE;
+        nDonorClass = D2COMMON_ITEMS_GetClassOfClassSpecificItem(pCursorItem);
+        return nDonorClass == PCLASS_INVALID || nDonorClass == (int32_t)pPlayer->dwClassId;
+    }
+
+    pDonor = pCursorItem->dwUnitId == gnItemAppearanceDonorGUID ? pCursorItem : CUNIT_FindUnitByGuidAndType(gnItemAppearanceDonorGUID, UNIT_ITEM);
+    if (ITEMAPPEARANCE_CanApply(pPlayer, pCursorItem, pDonor) != ITEMAPPEARANCE_OK)
+        return FALSE;
+
+    nGold = D2COMMON_STATLIST_UnitGetStatValue(pPlayer, STAT_GOLD, 0) + D2COMMON_STATLIST_UnitGetStatValue(pPlayer, STAT_GOLDBANK, 0);
+    return nGold >= ITEMAPPEARANCE_GetCost(pCursorItem, pDonor == pCursorItem);
+}
+
+
+//  The panel's instruction text for the current phase, with the price once the item to change is in the slot.
+void __fastcall ITEMAPPEARANCE_GetAnvilInstruction(Unicode *wszOut, int32_t nCapacity)
+{
+    D2UnitStrc *pItem;
+    char szText[256];
+
+    if (!gbItemAppearanceHasDonor)
+    {
+        ITEMAPPEARANCE_Widen(wszOut, nCapacity, "Place the item whose look you want and press the button.");
+        return;
+    }
+
+    pItem = gnAnvilState == 2 ? CUNIT_FindUnitByGuidAndType(gnAnvilSlotUnitId, UNIT_ITEM) : NULL;
+    if (pItem)
+    {
+        STORM_SStrPrintf(szText, sizeof(szText), "%s: %d gold.",
+                         pItem->dwUnitId == gnItemAppearanceDonorGUID ? "Restore its own look" : "Give it the chosen look",
+                         ITEMAPPEARANCE_GetCost(pItem, pItem->dwUnitId == gnItemAppearanceDonorGUID));
+    }
+    else
+    {
+        STORM_SStrPrintf(szText, sizeof(szText), "Now place the item to change. Place the same item again to restore its own look.");
+    }
+    ITEMAPPEARANCE_Widen(wszOut, nCapacity, szText);
 }

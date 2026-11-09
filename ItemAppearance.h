@@ -43,3 +43,15 @@ int32_t __fastcall ITEMAPPEARANCE_GetCost(D2UnitStrc *pItem, BOOL bRestore);
 BOOL __fastcall ITEMAPPEARANCE_IsBlacksmith(int32_t nNpcClassId);
 void __fastcall ITEMAPPEARANCE_SendRequest(D2UnitGUID nNpcGUID, D2UnitGUID nItemGUID, D2UnitGUID nDonorGUID);
 void __fastcall ITEMAPPEARANCE_AppendTooltipText(D2UnitStrc *pItem, Unicode *wszOut, int32_t nCapacity);
+
+//  The anvil panel's appearance mode (gnAnvilPanelMode 2): first an item whose look is copied (the donor) goes into the slot and is confirmed,
+//  then the item to change. gbItemAppearanceHasDonor tells the two phases apart; gnItemAppearanceDonorGUID is the confirmed donor.
+constexpr int32_t ANVIL_PANELMODE_ITEMAPPEARANCE = 2;
+inline int32_t gbItemAppearanceHasDonor;
+inline D2UnitGUID gnItemAppearanceDonorGUID;
+
+int32_t __cdecl ITEMAPPEARANCE_OnMenuClicked(void);
+const Unicode *__fastcall ITEMAPPEARANCE_GetMenuText(void);
+BOOL __fastcall ITEMAPPEARANCE_AnvilAccepts(D2UnitStrc *pPlayer, D2UnitStrc *pCursorItem);
+void __fastcall ITEMAPPEARANCE_GetAnvilInstruction(Unicode *wszOut, int32_t nCapacity);
+const Unicode *__fastcall ITEMAPPEARANCE_GetAnvilButtonText(void);

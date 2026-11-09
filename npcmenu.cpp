@@ -8,6 +8,7 @@
 #include "Game.h"
 #include "CoreArchive.h"
 #include "npcmenu.h"
+#include "ItemAppearance.h"
 
 //  The original's __FILE__ for this unit, pushed by every assert and trace that names its file.
 static const char szSourceFile[] = "C:\\projects\\D2\\head\\Diablo2\\Source\\D2Client\\UI\\npcmenu.cpp";
@@ -3957,6 +3958,9 @@ void __cdecl NPCMENU_BuildMainMenu(void)
         }
         DIALOG_AddLine(sgUIState.hDialogMainMenu, wszLine, 15, 0, 0, 1, pRec->pfnHandler[nRow], bSelectable);
     }
+    //  Item appearance: the blacksmiths' Transmogrify row, above Cancel (ItemAppearance.h).
+    if (ITEMAPPEARANCE_IsBlacksmith((int32_t)pNpc->dwClassId))
+        DIALOG_AddLine(sgUIState.hDialogMainMenu, ITEMAPPEARANCE_GetMenuText(), 15, 0, 0, 1, ITEMAPPEARANCE_OnMenuClicked, 1);
     DIALOG_AddLine(sgUIState.hDialogMainMenu, D2LANG_GetStringFromTblIndex(STR_IDX_4142_lowercasecancel), 15, 0, 0, 1, NPCMENU_OnMainMenuCancel, 1);
 }
 

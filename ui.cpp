@@ -1882,7 +1882,9 @@ wchar_t *__fastcall UI_AddColorCodeToWstring(wchar_t *wszText, uint32_t nColor)
     //  1024: the loop at 0x6FB20463 runs the closure 3FFh times from &wszScratch[1] and the store at 0x6FB20454 does element 0 on its own,
     //  so the array is 1023 + 1. The declaration constructs all 1024 where the original constructs 1023: one extra call into D2Lang,
     //  writing the same zero the line below writes again.
-    struct Unicode wszScratch[1024];
+    //  QOL: 4096 rather than the original's 1024. The item description's blocks can pass 1023 characters with the stat ranges
+    //  (ItemRanges.cpp), and a longer text would run past the scratch buffer; the callers that colour such blocks give 4096-Unicode buffers.
+    struct Unicode wszScratch[4096];
 
     wszScratch[0].ch = 0;
     memset(&wszScratch[1], 0, sizeof(wszScratch) - sizeof(wszScratch[0]));

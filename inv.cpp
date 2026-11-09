@@ -8,6 +8,7 @@
 #include "npcmenu.h"
 #include "panel.h"
 #include "inv.h"
+#include "ItemRanges.h"
 
 //  inv.cpp -- the inventory family of D2Client.dll 1.10: the inventory grid, the item description panel, the item name and price text
 //  builders, the shop panel's open, close and release paths, and the message handlers of the mercenary inventory, trade, cube, stash and
@@ -7379,6 +7380,8 @@ void __fastcall INV_AppendEtherealAndSocketsText(D2UnitStrc *pItem, Unicode *wsz
         Unicode::strcat(wszOut, pwszSpace);
         Unicode::strcat(wszOut, wszSockets);
         Unicode::strcat(wszOut, pwszNewline);
+        //  QOL: the socket count's range; both callers draw the line in the magic colour, 3
+        ITEMRANGES_AppendSocketsRange(pItem, (uint8_t)D2COMMON_ITEMS_GetSockets(pItem), 3, wszOut);
     }
     else if (bAppended)
     {
@@ -7431,6 +7434,8 @@ void __fastcall INV_AppendDurabilityText(D2UnitStrc *pItem, Unicode *wszOut, D2I
             UI_AddColorCodeToWstring((wchar_t *)wszNumber, 3);
         Unicode::strcat(wszOut, wszNumber);
         Unicode::strcat(wszOut, pwszNewline);
+        //  QOL: the maximum durability's range
+        ITEMRANGES_AppendDurabilityRange(pItem, D2COMMON_STATLIST_GetMaxDurabilityFromUnit(pItem), 0, wszOut);
     }
 }
 
@@ -7838,6 +7843,8 @@ void __fastcall INV_AppendDefenseText(D2UnitStrc *pUnit, D2UnitStrc *pItem, Unic
         UI_AddColorCodeToWstring((wchar_t *)wszDefense, 3);
     Unicode::strcat(wszOut, wszDefense);
     Unicode::strcat(wszOut, pwszNewline);
+    //  QOL: the defense's range
+    ITEMRANGES_AppendDefenseRange(pItem, nDefense, 0, wszOut);
 }
 
 
@@ -8849,8 +8856,10 @@ static void __fastcall INV_DrawSetItemDescription(D2UnitStrc *pUnit)
     nColorStrength = 0;
     nColorDexterity = 0;
 
-    Unicode wszSetText[1024];
-    Unicode wszPopup[2048];
+    //  QOL: wszSetText, wszPopup, wszStats, wszMagicMods, wszSetBonus and wszStateMods are larger than the original's (1024, 2048, 1024, 1024,
+    //  512, 512): the stat ranges (ItemRanges.cpp) lengthen them
+    Unicode wszSetText[4096];
+    Unicode wszPopup[4096];
     Unicode wszItemName[256];
     Unicode wszSetName[256];
     Unicode wszDurability[256];
@@ -8861,12 +8870,12 @@ static void __fastcall INV_DrawSetItemDescription(D2UnitStrc *pUnit)
     Unicode wszChanceToBlock[256];
     Unicode wszSkillDamage[256];
     Unicode wszDefense[256];
-    Unicode wszStats[1024];
+    Unicode wszStats[2048];
     Unicode wszAttackSpeed[256];
     Unicode wszPieceList[512];
-    Unicode wszMagicMods[1024];
-    Unicode wszSetBonus[512];
-    Unicode wszStateMods[512];
+    Unicode wszMagicMods[4096];
+    Unicode wszSetBonus[2048];
+    Unicode wszStateMods[2048];
     Unicode wszClassOnly[256];
 
     nColorClass = 0;
@@ -9011,14 +9020,17 @@ static void __fastcall INV_DrawSetItemDescription(D2UnitStrc *pUnit)
         INV_AppendEtherealAndSocketsText(gpHoverItem, wszSockets);
         Unicode::strcpy(wszMagicMods, wszSockets);
     }
-    MODS_AppendMagicModsText(gpHoverItem, wszMagicMods, 1024, 1, (const Unicode *)NULL);
+    ITEMRANGES_SetBlockColor(3);    //  QOL: the colour each block is drawn in, for the stat ranges
+    MODS_AppendMagicModsText(gpHoverItem, wszMagicMods, 4096, 1, (const Unicode *)NULL);
 
     wszSetBonus[0].ch = 0;
-    MODS_AppendSetBonusText(pPlayer, gpHoverItem, wszSetBonus, 512);
+    ITEMRANGES_SetBlockColor(2);
+    MODS_AppendSetBonusText(pPlayer, gpHoverItem, wszSetBonus, 2048);
     wszStateMods[0].ch = 0;
     if (gpHoverItem && gpHoverItem->dwItemMode == IMODE_EQUIP)
     {
-        MODS_AppendStateModsText(pPlayer, gpHoverItem, wszStateMods, 512);
+        ITEMRANGES_SetBlockColor(4);
+        MODS_AppendStateModsText(pPlayer, gpHoverItem, wszStateMods, 2048);
     }
 
     //  the piece list. wszSetText carries over between pieces: a piece with no string skips the format and appends the previous piece's line
@@ -9085,6 +9097,15 @@ static void __fastcall INV_DrawSetItemDescription(D2UnitStrc *pUnit)
                 Unicode::strcat(wszPopup, (const Unicode *)UI_AddColorCodeToWstring((wchar_t *)wszPriceless, 1));
             }
         }
+    }
+
+    //  QOL: D2Win draws nothing of a text of 1024 characters or more. When the stat ranges made it that long, it is built again without them.
+    if (ITEMRANGES_IsEnabled() && Unicode::strlen(wszPopup) >= 1024)
+    {
+        ITEMRANGES_SetSuppressed(TRUE);
+        INV_DrawSetItemDescription(pUnit);
+        ITEMRANGES_SetSuppressed(FALSE);
+        return;
     }
 
     GFXUTIL_ReturnArg(wszPopup);
@@ -9221,8 +9242,10 @@ void __fastcall INV_DrawItemDescription(D2UnitStrc *pUnit, BOOL bVendorUnit)
     nColorStrength = 0;
     nColorDexterity = 0;
 
-    Unicode wszCombined[1024];
-    Unicode wszPopupText[1024];
+    //  QOL: 4096 rather than the original's 1024 for these two: the stat ranges (ItemRanges.cpp) lengthen the text before it is cut to what
+    //  D2Win draws
+    Unicode wszCombined[4096];
+    Unicode wszPopupText[4096];
     Unicode wszUnused256[256];      // constructed, never read
     Unicode wszSocketFillers[256];
     Unicode wszCharmNote[256];
@@ -9423,6 +9446,9 @@ void __fastcall INV_DrawItemDescription(D2UnitStrc *pUnit, BOOL bVendorUnit)
     }
 
     //  the three helpers. The quality is asked first, before the cursor or the item; the set arm's flag test only when it is a set item.
+    //  QOL: from here the description is the hover item's, with its stat ranges (ItemRanges.cpp); its magic mods are drawn in colour 3
+    ITEMRANGES_DescriptionScope tRangesScope(gpHoverItem, 3);
+
     nItemQuality = D2COMMON_ITEMS_GetItemQuality(gpHoverItem);
     if (CURSOR_GetCursorState() == 8 || D2COMMON_ITEMS_GetTransmogrify(gpHoverItem))
     {
@@ -9742,6 +9768,15 @@ void __fastcall INV_DrawItemDescription(D2UnitStrc *pUnit, BOOL bVendorUnit)
         }
     }
 
+    //  QOL: the text is cut to 1023 characters below. When the stat ranges made it that long, it is built again without them.
+    if (ITEMRANGES_IsEnabled() && Unicode::strlen(wszPopupText) >= 1023)
+    {
+        ITEMRANGES_SetSuppressed(TRUE);
+        INV_DrawItemDescription(pUnit, bVendorUnit);
+        ITEMRANGES_SetSuppressed(FALSE);
+        return;
+    }
+
     GFXUTIL_ReturnArg(wszPopupText);
 
     //  the clamp comes after the text is built; jb, so unsigned
@@ -9884,6 +9919,8 @@ void __fastcall INV_AppendElementalDamageText(D2UnitStrc *pItem, Unicode *wszOut
         Unicode::strcat(wszTwoHand, pwszSpace);
         Unicode::strcat(wszTwoHand, wszNumber);
         Unicode::strcat(wszTwoHand, pwszNewline);
+        //  QOL: the line's damage range
+        ITEMRANGES_AppendDamageRange(pItem, STAT_SECONDARY_MINDAMAGE, STAT_SECONDARY_MAXDAMAGE, nMinDamage, nMaxDamage, 0, wszTwoHand);
 
         //  bAdjusted is carried over, not reset
         INV_CalcElementalDamageRange(pPlayer, pItem, STAT_MINDAMAGE, STAT_MAXDAMAGE, &nMinDamage, &nMaxDamage, &bAdjusted);
@@ -9904,6 +9941,8 @@ void __fastcall INV_AppendElementalDamageText(D2UnitStrc *pItem, Unicode *wszOut
         Unicode::strcat(wszOneHand, pwszSpace);
         Unicode::strcat(wszOneHand, wszNumber);
         Unicode::strcat(wszOneHand, pwszNewline);
+        //  QOL: the line's damage range
+        ITEMRANGES_AppendDamageRange(pItem, STAT_MINDAMAGE, STAT_MAXDAMAGE, nMinDamage, nMaxDamage, 0, wszOneHand);
 
         UI_AddColorCodeToWstring((wchar_t *)wszTwoHand, 0);
         UI_AddColorCodeToWstring((wchar_t *)wszOneHand, 0);
@@ -9941,6 +9980,11 @@ void __fastcall INV_AppendElementalDamageText(D2UnitStrc *pItem, Unicode *wszOut
         Unicode::strcat(wszOut, pwszSpace);
         Unicode::strcat(wszOut, wszNumber);
         Unicode::strcat(wszOut, pwszNewline);
+        //  QOL: the line's damage range
+        if (nLabel == STR_IDX_3466_ItemStats1m)
+            ITEMRANGES_AppendDamageRange(pItem, STAT_SECONDARY_MINDAMAGE, STAT_SECONDARY_MAXDAMAGE, nMinDamage, nMaxDamage, 0, wszOut);
+        else
+            ITEMRANGES_AppendDamageRange(pItem, STAT_MINDAMAGE, STAT_MAXDAMAGE, nMinDamage, nMaxDamage, 0, wszOut);
     }
 
     //  a throwing weapon, after the weapon lines
@@ -9972,6 +10016,8 @@ void __fastcall INV_AppendElementalDamageText(D2UnitStrc *pItem, Unicode *wszOut
         Unicode::strcat(wszThrow, pwszSpace);
         Unicode::strcat(wszThrow, wszNumber);
         Unicode::strcat(wszThrow, pwszNewline);
+        //  QOL: the line's damage range
+        ITEMRANGES_AppendDamageRange(pItem, STAT_ITEM_THROW_MINDAMAGE, STAT_ITEM_THROW_MAXDAMAGE, nMinDamage, nMaxDamage, 0, wszThrow);
         Unicode::strcat(wszOut, wszThrow);
     }
 }

@@ -4,6 +4,7 @@
 #include "D2Client.h"
 #include "Game.h"
 #include "mods.h"
+#include "ItemRanges.h"
 
 //  mods.cpp -- the item description's property text of D2Client.dll 1.10: nine functions, 0x6FAF12C0..0x6FAF389C, from
 //  MODS_AppendBluntUndeadBonusText to MODS_FormatElementalDamageText (the blunt weapon's undead bonus, a rune's property set as text, the
@@ -370,7 +371,8 @@ void __fastcall MODS_BuildStatsText(D2UnitStrc *pUnit, Unicode *wszOut, int32_t 
 
     UNREFERENCED_PARAMETER(nMaxLen);
 
-    Unicode wszLine[128];
+    //  QOL: 256 rather than the original's 128, for the stat range ItemRanges.cpp puts after the line
+    Unicode wszLine[256];
     Unicode wszUndead[128];
 
     if (D2COMMON_ITEMS_GetItemType(pUnit) == ITEMTYPE_ELIXIR)
@@ -479,6 +481,11 @@ void __fastcall MODS_BuildStatsText(D2UnitStrc *pUnit, Unicode *wszOut, int32_t 
     pwszSpace = D2LANG_GetStringFromTblIndex(STR_IDX_3995_space);
     pwszComma = D2LANG_GetStringFromTblIndex(STR_IDX_3852_KeyComma);
 
+    //  QOL: the ranges of the stats about to be rendered, when an item description with ranges is being built (ItemRanges.cpp)
+    D2ItemRangeTableStrc tRanges;
+    Unicode wszRange[128];
+    const BOOL bRanges = ITEMRANGES_BuildTable(pUnit, nState, nFlag, &tRanges);
+
     if (bAppendUndeadBonus && D2COMMON_ITEMS_CheckItemTypeId(pUnit, ITEMTYPE_BLUNT) && !D2COMMON_STATLIST_UnitGetItemStatOrSkillStatValue(pUnit, STAT_ITEM_UNDEADDAMAGE_PERCENT, 0))
     {
         MODS_AppendBluntUndeadBonusText(pUnit, wszUndead, 128);
@@ -570,8 +577,17 @@ void __fastcall MODS_BuildStatsText(D2UnitStrc *pUnit, Unicode *wszOut, int32_t 
             nLayer = aStats[iCopied].nLayer;
             if (!nValue)
                 continue;
+            const int32_t nLengthBefore = bRanges ? Unicode::strlen(wszOut) : 0;
             if (MODS_FormatElementalDamageText(aDamageGroups, (D2C_ItemStats)nDescStatId, wszOut))
+            {
+                //  QOL: the damage line's range, into the line just written
+                if (bRanges && Unicode::strlen(wszOut) > nLengthBefore)
+                {
+                    ITEMRANGES_FormatDamageGroupSuffix(&tRanges, pUnit, pMergedStats, aDamageGroups, nDescStatId, wszRange);
+                    ITEMRANGES_InsertBeforeNewline(&wszOut[nLengthBefore], wszRange);
+                }
                 continue;
+            }
             if (!MODS_FormatPropertyLine(pUnit, pMergedStats, (D2C_ItemStats)nDescStatId, nLayer, nValue, wszLine))
                 continue;
 
@@ -584,6 +600,13 @@ void __fastcall MODS_BuildStatsText(D2UnitStrc *pUnit, Unicode *wszOut, int32_t 
             {
                 if (D2COMMON_STATLIST_GetStatValue(pMergedStats, STAT_MAXDAMAGE, 0))
                     continue;
+            }
+
+            //  QOL: the stat's range after its line
+            if (bRanges)
+            {
+                ITEMRANGES_FormatStatSuffix(&tRanges, pUnit, pMergedStats, nDescStatId, nLayer, nValue, wszRange);
+                Unicode::strcat(wszLine, wszRange);
             }
 
             if (bAppendNewline)
@@ -1426,10 +1449,11 @@ void __fastcall MODS_AppendMagicModsText(D2UnitStrc *pUnit, Unicode *wszOut, int
 
     UNREFERENCED_PARAMETER(nMaxLen);
 
-    Unicode wszMods[1024];
+    //  QOL: 4096 rather than the original's 1024: the stat ranges lengthen the lines
+    Unicode wszMods[4096];
 
     wszMods[0].ch = 0;
-    MODS_BuildStatsText(pUnit, wszMods, 1024, 1, STATE_NONE, STATE_RUNEWORD, STATLIST_MAGIC, bAppendNewline);
+    MODS_BuildStatsText(pUnit, wszMods, 4096, 1, STATE_NONE, STATE_RUNEWORD, STATLIST_MAGIC, bAppendNewline);
     if (!wszSep)
     {
         Unicode::strcat(wszOut, wszMods);

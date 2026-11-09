@@ -22,6 +22,19 @@ the original does.
 * One `.cpp` per unit of the original. Where an assert of the original names its source file, the file is named after
   it; `Shared.cpp` holds the functions no single unit can claim.
 
+## Quality-of-life additions
+
+A few features the original does not have, each switched by a global in `Qol.h` (`QOLMODE_OFF`, `QOLMODE_ALWAYS` or
+`QOLMODE_WHILE_KEY_HELD`). With every mode set to `QOLMODE_OFF` the client behaves as the original does. The code they add
+to the original's units is marked `QOL:`.
+
+* **Stat ranges** (`ItemRanges.cpp`, `gnQolStatRangesMode`, default on): an item's description shows, in grey after each
+  stat line, the range the stat can roll in -- `+25% Faster Cast Rate [25-35]` -- for magic, rare, crafted, set and unique
+  items, runewords and socketed items, and after the defense, damage, durability and socket lines. Ranges come from the
+  item's affixes and records and the data tables; a stat whose value falls outside what those sources allow shows no range.
+  A crafted item's recipe properties get ranges only when D2MOO's D2Game made it and `itemstatcost.txt` has the row for
+  `STAT_D2MOO_ITEM_CRAFTRECIPE` (id 359, Save Bits 14, no description).
+
 ## Generated headers
 
 `D2Constants.h`, `D2Structs.h`, `D2Ptrs.h`, `D2Vars.h` and `D2Imports.h` are generated from the reverse-engineering

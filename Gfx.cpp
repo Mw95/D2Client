@@ -2,6 +2,7 @@
 
 #include "DLLmain.h"
 #include "D2Client.h"
+#include "Saturate.h"
 #include "CoreArchive.h"
 #include "Gfx.h"
 
@@ -1730,12 +1731,10 @@ uint8_t __fastcall GFX_GetUnitHilightPaletteIndex(D2UnitStrc *pUnit)
     if (!nMaxLife)
         return gnPaletteIndexGreen;
 
-    //  BUG: the percentage can overflow: `lea` / `lea` / `shl 2` (0x6FB59EEA..0x6FB59EF0) is the hit points times 100 in 32 bits; the stat is 8.8
-    //  fixed point, so a monster with more than 83886 hit points wraps. Written unsigned, which wraps the same way and is defined, then divided
-    //  signed as the bytes divide. LATENT: the client keeps a monster's life on a scale of 128 (STAT_MAXHP 0x8000); two unmasked packet values and
-    //  a
-    //  hireling's 32-bit stat packets were not traced to a bound.
-    nLifePercent = (int32_t)(100u * (uint32_t)D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_HITPOINTS, 0)) / nMaxLife;
+    //  DIFFERENCE: overflow fix. The original takes the hit points times 100 in 32 bits (`lea` / `lea` / `shl 2`, 0x6FB59EEA..0x6FB59EF0); the
+    //  stat is 24.8 fixed point, so a unit with more than 83,886 hit points wrapped -- a hireling's real life comes in 32-bit stat packets. The
+    //  product is now 64-bit (Saturate.h); below the wrap the percentage is the original's.
+    nLifePercent = SATURATE_MulDiv(D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_HITPOINTS, 0), 100, nMaxLife);
     if (nLifePercent < 33)
         return gnPaletteIndexRed;
 

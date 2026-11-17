@@ -2,6 +2,7 @@
 
 #include "DLLmain.h"
 #include "D2Client.h"
+#include "Saturate.h"
 #include "WINMAIN.h"
 #include "CoreArchive.h"
 #include "ui.h"
@@ -11,6 +12,10 @@
 //  formatters, the tooltip builders (current/next level, requirements, finishing move), the descdam and descatt handlers that compute and
 //  draw the skill panel's damage and attack-rating figures, and the panel drawer SKILLDESC_DrawSkillInfo with its callers.
 //  The original source file is UI\SkillDesc.cpp (the assert string at 0x6FB8CE90 names it). Address range 0x6FB0A4A0..0x6FB16300.
+//  DIFFERENCE: overflow fix, throughout the damage figures. The original adds and multiplies damages, damage percentages and poison
+//  lengths in 32 bits, so a large weapon, skill or poison damage wrapped to a negative or small figure on the skill panel and in tooltips.
+//  Every such sum and product here goes through Saturate.h (SATURATE_Add, SATURATE_MulDiv, ...) and saturates instead; for figures that did
+//  not wrap the results are the original's. See OVERFLOW_FIXES.md.
 
 //  Layout and value checks for the skilldesc.txt and skills.txt offsets this file indexes.
 
@@ -304,11 +309,11 @@ int32_t __fastcall SKILLDESC_ComputeAttackRating(D2UnitStrc *pUnit, int32_t *pnA
         nProgressiveToHit = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_PROGRESSIVE_TOHIT, 0);
         if (nProgressiveToHit)
         {
-            nPercent += nProgressiveToHit;
+            nPercent = SATURATE_Add(nPercent, nProgressiveToHit);
             *pnColor = 3;
         }
     }
-    *pnAttackRating += nPercent * *pnAttackRating / 100;
+    *pnAttackRating += SATURATE_MulDiv(nPercent, *pnAttackRating, 100);
     if (D2COMMON_STATES_CheckStateMaskAttBlueOnUnit(pUnit))
     {
         *pnColor = 3;
@@ -378,11 +383,11 @@ void __fastcall SKILLDESC_AttFunc5(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Ski
         nProgressiveToHit = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_PROGRESSIVE_TOHIT, 0);
         if (nProgressiveToHit)
         {
-            nPercent += nProgressiveToHit;
+            nPercent = SATURATE_Add(nPercent, nProgressiveToHit);
             *pnColorA = 3;
         }
     }
-    *pnAttackRatingOut += nPercent * *pnAttackRatingOut / 100;
+    *pnAttackRatingOut += SATURATE_MulDiv(nPercent, *pnAttackRatingOut, 100);
     if (D2COMMON_STATES_CheckStateMaskAttBlueOnUnit(pUnit))
     {
         *pnColorA = 3;
@@ -746,8 +751,8 @@ void __fastcall SKILLDESC_DamFunc6(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Ski
         nWeaponMaxRaw = 0;
         SKILLDESC_AddWeaponPhysDamage(pUnit, &nWeaponMinRaw, &nWeaponMaxRaw, &nWeaponColor, 0, 0, pSkill, 128, NULL, 0);
         SKILLDESC_AddItemElemDamage(pUnit, &nWeaponMinRaw, &nWeaponMaxRaw, &nWeaponColor, 0, pSkill);
-        nWeaponMin = nSrcDamBase * nWeaponMinRaw / 128;
-        nWeaponMax = nSrcDamBase * nWeaponMaxRaw / 128;
+        nWeaponMin = SATURATE_MulDiv(nSrcDamBase, nWeaponMinRaw, 128);
+        nWeaponMax = SATURATE_MulDiv(nSrcDamBase, nWeaponMaxRaw, 128);
     }
 
     nSkillMin = 0;
@@ -772,10 +777,10 @@ void __fastcall SKILLDESC_DamFunc6(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Ski
         nDrawColor = 0;
         break;
     }
-    nSkillMin += D2COMMON_SKILLS_GetMinPhysDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 0) >> 8;
-    nSkillMax += D2COMMON_SKILLS_GetMaxPhysDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 0) >> 8;
-    nSkillMin += D2COMMON_SKILLS_GetMinElemDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 1) >> 8;
-    nSkillMax += D2COMMON_SKILLS_GetMaxElemDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 1) >> 8;
+    nSkillMin = SATURATE_Add(nSkillMin, D2COMMON_SKILLS_GetMinPhysDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 0) >> 8);
+    nSkillMax = SATURATE_Add(nSkillMax, D2COMMON_SKILLS_GetMaxPhysDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 0) >> 8);
+    nSkillMin = SATURATE_Add(nSkillMin, D2COMMON_SKILLS_GetMinElemDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 1) >> 8);
+    nSkillMax = SATURATE_Add(nSkillMax, D2COMMON_SKILLS_GetMaxElemDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 1) >> 8);
     SKILLDESC_AddElemDamageByType(pUnit, &nSkillMin, &nSkillMax, nEType);
 
     //  weapon side empty: the skill's own line, in the nEType colour
@@ -1001,8 +1006,8 @@ int32_t __fastcall SKILLDESC_AddWeaponPhysDamage(D2UnitStrc *pUnit, int32_t *pnM
     }
     if (nSrcDamPct != 128)
     {
-        nMinDamage = nSrcDamPct * nMinDamage / 128;
-        nMaxDamage = nSrcDamPct * nMaxDamage / 128;
+        nMinDamage = SATURATE_MulDiv(nSrcDamPct, nMinDamage, 128);
+        nMaxDamage = SATURATE_MulDiv(nSrcDamPct, nMaxDamage, 128);
     }
     if (nSrcDamPct)
     {
@@ -1010,12 +1015,12 @@ int32_t __fastcall SKILLDESC_AddWeaponPhysDamage(D2UnitStrc *pUnit, int32_t *pnM
         {
             nMinDamage = 1;
         }
-        *pnMin += nMinDamage;
+        *pnMin = SATURATE_Add(*pnMin, nMinDamage);
         if (nMaxDamage < 2)
         {
             nMaxDamage = 2;
         }
-        *pnMax += nMaxDamage;
+        *pnMax = SATURATE_Add(*pnMax, nMaxDamage);
     }
 
     nDamagePercentBase = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_DAMAGEPERCENT, 0) + nExtraDamagePercent;
@@ -1028,7 +1033,7 @@ int32_t __fastcall SKILLDESC_AddWeaponPhysDamage(D2UnitStrc *pUnit, int32_t *pnM
         nChargeUpPercent = SKILLDESC_GetChargeUpDamagePercent();
         if (nChargeUpPercent)
         {
-            nDamagePercent += nChargeUpPercent;
+            nDamagePercent = SATURATE_Add(nDamagePercent, nChargeUpPercent);
             *pnColor = 3;
         }
     }
@@ -1039,18 +1044,18 @@ int32_t __fastcall SKILLDESC_AddWeaponPhysDamage(D2UnitStrc *pUnit, int32_t *pnM
         nStrengthBonus = D2COMMON_ITEMS_GetStrengthBonus(pWeaponUsed);
         if (nStrengthBonus)
         {
-            nDamagePercent += nStrengthBonus * D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_STRENGTH, 0) / 100;
+            nDamagePercent = SATURATE_Add(nDamagePercent, SATURATE_MulDiv(nStrengthBonus, D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_STRENGTH, 0), 100));
         }
         nDexBonus = D2COMMON_ITEMS_GetDexBonus(pWeaponUsed);
         if (nDexBonus)
         {
-            nDamagePercent += nDexBonus * D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_DEXTERITY, 0) / 100;
+            nDamagePercent = SATURATE_Add(nDamagePercent, SATURATE_MulDiv(nDexBonus, D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_DEXTERITY, 0), 100));
         }
         nNormalDamage = D2COMMON_STATLIST_UnitGetItemStatOrSkillStatValue(pWeaponUsed, STAT_ITEM_NORMALDAMAGE, 0);
     }
     else
     {
-        nDamagePercent += D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_STRENGTH, 0);
+        nDamagePercent = SATURATE_Add(nDamagePercent, D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_STRENGTH, 0));
     }
 
     if (D2COMMON_STATES_CheckStateMaskDamBlueOnUnit(pUnit))
@@ -1066,8 +1071,9 @@ int32_t __fastcall SKILLDESC_AddWeaponPhysDamage(D2UnitStrc *pUnit, int32_t *pnM
         nDamagePercent = -90;
     }
 
-    *pnMin = nFlatBonus + nNormalDamage + *pnMin * (nItemMinDamagePercent + nDamagePercent + 100) / 100;
-    *pnMax = nFlatBonus + nNormalDamage + *pnMax * (nItemMaxDamagePercent + nDamagePercent + 100) / 100;
+    //  DIFFERENCE: overflow fix; the sum and the product are 64-bit and saturated (Saturate.h), where the original's 32-bit ones wrapped.
+    *pnMin = SATURATE_ToInt32((int64_t)nFlatBonus + nNormalDamage + (int64_t)*pnMin * ((int64_t)nItemMinDamagePercent + nDamagePercent + 100) / 100);
+    *pnMax = SATURATE_ToInt32((int64_t)nFlatBonus + nNormalDamage + (int64_t)*pnMax * ((int64_t)nItemMaxDamagePercent + nDamagePercent + 100) / 100);
     return 1;
 }
 
@@ -1142,7 +1148,7 @@ int32_t __cdecl SKILLDESC_GetChargeUpDamagePercent(void)
                                         {
                                             nPerCharge = 0;
                                         }
-                                        nBonus += nStatValue * nPerCharge;
+                                        nBonus = SATURATE_Add(nBonus, SATURATE_Mul(nStatValue, nPerCharge));
                                     }
                                 }
                             }
@@ -1211,16 +1217,16 @@ void __fastcall SKILLDESC_AddItemElemDamage(D2UnitStrc *pUnit, int32_t *pnMin, i
             nMastery = D2COMMON_STATLIST_UnitGetStatValue(pUnit, (D2C_ItemStats)*(const int32_t *)nStatRow, 0);
             if (nMastery)
             {
-                nMin += DATATBLS_ApplyRatio(nMin, nMastery, 100);
-                nMax += DATATBLS_ApplyRatio(nMax, nMastery, 100);
+                nMin = SATURATE_Add(nMin, DATATBLS_ApplyRatio(nMin, nMastery, 100));
+                nMax = SATURATE_Add(nMax, DATATBLS_ApplyRatio(nMax, nMastery, 100));
             }
         }
         if (nMin >= nMax)
         {
             nMin = nMax;
         }
-        *pnMin += nMin;
-        *pnMax += nMax;
+        *pnMin = SATURATE_Add(*pnMin, nMin);
+        *pnMax = SATURATE_Add(*pnMax, nMax);
         if (nMin || nMax)
         {
             *pnColor = *pnColorRow;
@@ -1237,8 +1243,8 @@ void __fastcall SKILLDESC_AddItemElemDamage(D2UnitStrc *pUnit, int32_t *pnMin, i
         nPoisonMastery = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_PASSIVE_POIS_MASTERY, 0);
         if (nPoisonMastery)
         {
-            nPoisonMin += DATATBLS_ApplyRatio(nPoisonMin, nPoisonMastery, 100);
-            nPoisonMax += DATATBLS_ApplyRatio(nPoisonMax, nPoisonMastery, 100);
+            nPoisonMin = SATURATE_Add(nPoisonMin, DATATBLS_ApplyRatio(nPoisonMin, nPoisonMastery, 100));
+            nPoisonMax = SATURATE_Add(nPoisonMax, DATATBLS_ApplyRatio(nPoisonMax, nPoisonMastery, 100));
         }
         nPoisonLength = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_SKILL_POISON_OVERRIDE_LENGTH, 0);
         if (nPoisonLength <= 0)
@@ -1251,8 +1257,8 @@ void __fastcall SKILLDESC_AddItemElemDamage(D2UnitStrc *pUnit, int32_t *pnMin, i
             nPoisonLength = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_POISONLENGTH, 0) / nPoisonCount;
         }
         *pnColor = 2;
-        *pnMin += (nPoisonMin * nPoisonLength) >> 8;
-        *pnMax += (nPoisonMax * nPoisonLength) >> 8;
+        *pnMin = SATURATE_Add(*pnMin, SATURATE_ToInt32(((int64_t)nPoisonMin * nPoisonLength) >> 8));
+        *pnMax = SATURATE_Add(*pnMax, SATURATE_ToInt32(((int64_t)nPoisonMax * nPoisonLength) >> 8));
     }
 
     if (*pnMax > 0)
@@ -1373,8 +1379,8 @@ int32_t __fastcall SKILLDESC_AddChargeUpElemDamage(D2UnitStrc *pUnit, int32_t *p
                                                     iCalc = 3;
                                                 }
                                             }
-                                            *pnMin += D2COMMON_SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDescTxt->dwProgDmgMin[iCalc - 1], (D2C_Skills)nChargeSkillId, nChargeLevel);
-                                            *pnMax += D2COMMON_SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDescTxt->dwProgDmgMax[iCalc - 1], (D2C_Skills)nChargeSkillId, nChargeLevel);
+                                            *pnMin = SATURATE_Add(*pnMin, D2COMMON_SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDescTxt->dwProgDmgMin[iCalc - 1], (D2C_Skills)nChargeSkillId, nChargeLevel));
+                                            *pnMax = SATURATE_Add(*pnMax, D2COMMON_SKILLS_EvaluateSkillDescFormula(pUnit, pSkillDescTxt->dwProgDmgMax[iCalc - 1], (D2C_Skills)nChargeSkillId, nChargeLevel));
                                             nElemTypeByte = pSkillDescTxt->nPrgDamElem[iCalc - 1];
                                             if (nElemTypeByte && nElemTypeByte < 0xD)
                                             {
@@ -1402,8 +1408,8 @@ int32_t __fastcall SKILLDESC_AddChargeUpElemDamage(D2UnitStrc *pUnit, int32_t *p
                                         }
                                         else
                                         {
-                                            *pnMin += D2COMMON_SKILLS_GetMinElemDamage(pUnit, (D2C_Skills)nChargeSkillId, nChargeLevel, 1) >> 8;
-                                            *pnMax += D2COMMON_SKILLS_GetMaxElemDamage(pUnit, (D2C_Skills)nChargeSkillId, nChargeLevel, 1) >> 8;
+                                            *pnMin = SATURATE_Add(*pnMin, D2COMMON_SKILLS_GetMinElemDamage(pUnit, (D2C_Skills)nChargeSkillId, nChargeLevel, 1) >> 8);
+                                            *pnMax = SATURATE_Add(*pnMax, D2COMMON_SKILLS_GetMaxElemDamage(pUnit, (D2C_Skills)nChargeSkillId, nChargeLevel, 1) >> 8);
                                         }
                                     }
                                 }
@@ -1445,25 +1451,25 @@ void __fastcall SKILLDESC_AddElemDamageByType(D2UnitStrc *pUnit, int32_t *pnMin,
     switch (nEType)
     {
     case 1:
-        *pnMin += D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_FIREMINDAM, 0);
+        *pnMin = SATURATE_Add(*pnMin, D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_FIREMINDAM, 0));
         nMaxDam = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_FIREMAXDAM, 0);
-        *pnMax += nMaxDam;
+        *pnMax = SATURATE_Add(*pnMax, nMaxDam);
         return;
     case 2:
-        *pnMin += D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_LIGHTMINDAM, 0);
+        *pnMin = SATURATE_Add(*pnMin, D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_LIGHTMINDAM, 0));
         nMaxDam = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_LIGHTMAXDAM, 0);
-        *pnMax += nMaxDam;
+        *pnMax = SATURATE_Add(*pnMax, nMaxDam);
         return;
     case 3:
-        *pnMin += D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_MAGICMINDAM, 0);
+        *pnMin = SATURATE_Add(*pnMin, D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_MAGICMINDAM, 0));
         nMaxDam = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_MAGICMAXDAM, 0);
-        *pnMax += nMaxDam;
+        *pnMax = SATURATE_Add(*pnMax, nMaxDam);
         return;
     case 4:
     case 0xC:
-        *pnMin += D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_COLDMINDAM, 0);
+        *pnMin = SATURATE_Add(*pnMin, D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_COLDMINDAM, 0));
         nMaxDam = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_COLDMAXDAM, 0);
-        *pnMax += nMaxDam;
+        *pnMax = SATURATE_Add(*pnMax, nMaxDam);
         return;
     case 5:
         nPoisonLength = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_SKILL_POISON_OVERRIDE_LENGTH, 0);
@@ -1478,9 +1484,9 @@ void __fastcall SKILLDESC_AddElemDamageByType(D2UnitStrc *pUnit, int32_t *pnMin,
         }
         nPoisonMinDam = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_POISONMINDAM, 0);
         nMaxDam = nPoisonLength * D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_POISONMAXDAM, 0);
-        *pnMin += (nPoisonLength * nPoisonMinDam) >> 8;
+        *pnMin = SATURATE_Add(*pnMin, SATURATE_ToInt32(((int64_t)nPoisonLength * nPoisonMinDam) >> 8));
         nMaxDam >>= 8;
-        *pnMax += nMaxDam;
+        *pnMax = SATURATE_Add(*pnMax, nMaxDam);
         return;
     default:
         return;
@@ -1554,10 +1560,10 @@ void __fastcall SKILLDESC_DamFunc7(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Ski
         nMax = DATATBLS_ApplyRatio(nMax, nSrcDam, 128);
     }
 
-    nMin += D2COMMON_SKILLS_GetMinPhysDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 0) >> 8;
-    nMax += D2COMMON_SKILLS_GetMaxPhysDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 0) >> 8;
-    nMin += D2COMMON_SKILLS_GetMinElemDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 1) >> 8;
-    nMax += D2COMMON_SKILLS_GetMaxElemDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 1) >> 8;
+    nMin = SATURATE_Add(nMin, D2COMMON_SKILLS_GetMinPhysDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 0) >> 8);
+    nMax = SATURATE_Add(nMax, D2COMMON_SKILLS_GetMaxPhysDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 0) >> 8);
+    nMin = SATURATE_Add(nMin, D2COMMON_SKILLS_GetMinElemDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 1) >> 8);
+    nMax = SATURATE_Add(nMax, D2COMMON_SKILLS_GetMaxElemDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 1) >> 8);
 
     nYCopy = nY;
     nMinBeforeClamp = nMin;
@@ -1719,18 +1725,18 @@ void __fastcall SKILLDESC_DrawDualWieldDamage(D2UnitStrc *pUnit, D2SkillStrc *pS
     nValueACopy = pnValueA;
     if (pnValueA && pnColorA)
     {
-        nValueACopy = nSrcDam * pnValueA / 128 + pnMinTotal;
+        nValueACopy = SATURATE_Add(SATURATE_MulDiv(nSrcDam, pnValueA, 128), pnMinTotal);
         pnValueA = nValueACopy;
-        nColorACopy = pnMaxTotal + nSrcDam * pnColorA / 128;
+        nColorACopy = SATURATE_Add(pnMaxTotal, SATURATE_MulDiv(nSrcDam, pnColorA, 128));
         pnColorA = nColorACopy;
     }
     nMin2 = nMin;
     nMax2 = nMax;
     if (nMin && nMax)
     {
-        nMin2 = nSrcDam * nMin / 128 + pnMinTotal;
+        nMin2 = SATURATE_Add(SATURATE_MulDiv(nSrcDam, nMin, 128), pnMinTotal);
         nMin = nMin2;
-        nMax2 = pnMaxTotal + nSrcDam * nMax / 128;
+        nMax2 = SATURATE_Add(pnMaxTotal, SATURATE_MulDiv(nSrcDam, nMax, 128));
         nMax = nMax2;
     }
 
@@ -1859,8 +1865,8 @@ void __fastcall SKILLDESC_AddElemDamageAndColor(D2UnitStrc *pUnit, D2SkillsTxt *
             break;
         }
     }
-    *pnMinTotal += nMinElem;
-    *pnMaxTotal += nMaxElem;
+    *pnMinTotal = SATURATE_Add(*pnMinTotal, nMinElem);
+    *pnMaxTotal = SATURATE_Add(*pnMaxTotal, nMaxElem);
 }
 
 
@@ -2118,12 +2124,12 @@ void __fastcall SKILLDESC_DamFunc21(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Sk
     nStrengthBonus = D2COMMON_ITEMS_GetStrengthBonus(pWeapon);
     if (nStrengthBonus)
     {
-        nExtraPercent = nStrengthBonus * D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_STRENGTH, 0) / 100;
+        nExtraPercent = SATURATE_MulDiv(nStrengthBonus, D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_STRENGTH, 0), 100);
     }
     nDexBonus = D2COMMON_ITEMS_GetDexBonus(pWeapon);
     if (nDexBonus)
     {
-        nExtraPercent += nDexBonus * D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_DEXTERITY, 0) / 100;
+        nExtraPercent = SATURATE_Add(nExtraPercent, SATURATE_MulDiv(nDexBonus, D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_DEXTERITY, 0), 100));
     }
     nThrowMin = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_ITEM_THROW_MINDAMAGE, 0);
     nThrowMax = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_ITEM_THROW_MAXDAMAGE, 0);
@@ -2134,15 +2140,15 @@ void __fastcall SKILLDESC_DamFunc21(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Sk
     {
         nDamagePercent = -90;
     }
-    nMinScaled = nThrowMin + nThrowMin * (nDamagePercent + nMinPercent) / 100;
-    nMaxScaled = nThrowMax + nThrowMax * (nDamagePercent + nMaxPercent) / 100;
+    nMinScaled = SATURATE_ToInt32(nThrowMin + (int64_t)nThrowMin * ((int64_t)nDamagePercent + nMinPercent) / 100);
+    nMaxScaled = SATURATE_ToInt32(nThrowMax + (int64_t)nThrowMax * ((int64_t)nDamagePercent + nMaxPercent) / 100);
     nMasteryBonus = 0;
     if (D2COMMON_STATES_CheckState(pUnit, STATE_THROWINGMASTERY))
     {
         nMasteryBonus = D2COMMON_SKILLS_GetWeaponMasteryBonus(pUnit, pWeapon, pSkill, 1);
     }
-    nMinTotal = nMinScaled + DATATBLS_ApplyRatio(nMinScaled, nMasteryBonus, 100);
-    nMaxTotal = nMaxScaled + DATATBLS_ApplyRatio(nMaxScaled, nMasteryBonus, 100);
+    nMinTotal = SATURATE_Add(nMinScaled, DATATBLS_ApplyRatio(nMinScaled, nMasteryBonus, 100));
+    nMaxTotal = SATURATE_Add(nMaxScaled, DATATBLS_ApplyRatio(nMaxScaled, nMasteryBonus, 100));
     SKILLDESC_AddElemDamageByType(pUnit, &nMinTotal, &nMaxTotal, pSkillsTxt->nEType);
     nMaxAccum = nMaxTotal;
     if (nMaxTotal < nMinTotal)
@@ -2206,8 +2212,8 @@ void __fastcall SKILLDESC_DamFunc3(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Ski
     nSrcDam = pSkillsTxt->nSrcDam;
     nDrawColor = 0;
     SKILLDESC_ComputeThrowDamage(pUnit, &nThrowMin, &nThrowMax, &nDrawColor, 0, 0, pSkill, 0, NULL);
-    nThrowMin = nSrcDam * nThrowMin / 128;
-    nThrowMax = nSrcDam * nThrowMax / 128;
+    nThrowMin = SATURATE_MulDiv(nSrcDam, nThrowMin, 128);
+    nThrowMax = SATURATE_MulDiv(nSrcDam, nThrowMax, 128);
     SKILLDESC_AddElemDamageAndColor(pUnit, pSkillsTxt, nSkillLevel, &nThrowMin, &nThrowMax, &nDrawColor);
     nMaxClamped = nThrowMax;
     if (nThrowMin >= nThrowMax)
@@ -2364,12 +2370,12 @@ void __fastcall SKILLDESC_ComputeThrowDamage(D2UnitStrc *pUnit, int32_t *pnMin, 
     nStrengthBonus = D2COMMON_ITEMS_GetStrengthBonus(pWeaponUsed);
     if (nStrengthBonus)
     {
-        nStatBonus = nStrengthBonus * D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_STRENGTH, 0) / 100;
+        nStatBonus = SATURATE_MulDiv(nStrengthBonus, D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_STRENGTH, 0), 100);
     }
     nDexBonus = D2COMMON_ITEMS_GetDexBonus(pWeaponUsed);
     if (nDexBonus)
     {
-        nStatBonus += nDexBonus * D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_DEXTERITY, 0) / 100;
+        nStatBonus = SATURATE_Add(nStatBonus, SATURATE_MulDiv(nDexBonus, D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_DEXTERITY, 0), 100));
     }
     *pnMin = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_ITEM_THROW_MINDAMAGE, 0);
     *pnMax = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_ITEM_THROW_MAXDAMAGE, 0);
@@ -2380,8 +2386,8 @@ void __fastcall SKILLDESC_ComputeThrowDamage(D2UnitStrc *pUnit, int32_t *pnMin, 
     {
         nDamagePercent = -90;
     }
-    *pnMin += *pnMin * (nDamagePercent + nMinDamagePercent) / 100;
-    *pnMax += *pnMax * (nMaxDamagePercent + nDamagePercent) / 100;
+    *pnMin = SATURATE_ToInt32(*pnMin + (int64_t)*pnMin * ((int64_t)nDamagePercent + nMinDamagePercent) / 100);
+    *pnMax = SATURATE_ToInt32(*pnMax + (int64_t)*pnMax * ((int64_t)nMaxDamagePercent + nDamagePercent) / 100);
     nExtraPercent = nExtraDamagePercent;
     if (D2COMMON_STATES_CheckState(pUnit, STATE_THROWINGMASTERY))
     {
@@ -2406,8 +2412,8 @@ void __fastcall SKILLDESC_ComputeThrowDamage(D2UnitStrc *pUnit, int32_t *pnMin, 
     {
         result = nElemMin;
     }
-    *pnMin += nElemMin;
-    *pnMax += result;
+    *pnMin = SATURATE_Add(*pnMin, nElemMin);
+    *pnMax = SATURATE_Add(*pnMax, result);
 }
 
 
@@ -2639,8 +2645,8 @@ void __fastcall SKILLDESC_DamFunc5(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Ski
         nPhysMax = 0;
         SKILLDESC_AddWeaponPhysDamage(pUnit, &nPhysMin, &nPhysMax, &nDrawColor, 0, 0, pSkill, 128, NULL, 0);
         SKILLDESC_AddItemElemDamage(pUnit, &nPhysMin, &nPhysMax, &nDrawColor, 0, pSkill);
-        nSrcBonusMin = nSrcDam * nPhysMin / 128;
-        nSrcBonusMax = nSrcDam * nPhysMax / 128;
+        nSrcBonusMin = SATURATE_MulDiv(nSrcDam, nPhysMin, 128);
+        nSrcBonusMax = SATURATE_MulDiv(nSrcDam, nPhysMax, 128);
     }
     nPhysMin = (D2COMMON_SKILLS_GetMinPhysDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 0) >> 8) + nSrcBonusMin;
     nPhysMax = (D2COMMON_SKILLS_GetMaxPhysDamage(pUnit, (D2C_Skills)pSkillsTxt->nSkillId, nSkillLevel, 0) >> 8) + nSrcBonusMax;
@@ -2744,8 +2750,8 @@ void __fastcall SKILLDESC_DamFunc24(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Sk
         nPhysMax = 0;
         SKILLDESC_AddWeaponPhysDamage(pUnit, &nPhysMin, &nPhysMax, &nDrawColor, 0, 0, pSkill, 128, NULL, 0);
         SKILLDESC_AddItemElemDamage(pUnit, &nPhysMin, &nPhysMax, &nDrawColor, 0, pSkill);
-        nMinPhysDamage += nSrcDam * nPhysMin / 128;
-        nMaxPhysDamage += nSrcDam * nPhysMax / 128;
+        nMinPhysDamage = SATURATE_Add(nMinPhysDamage, SATURATE_MulDiv(nSrcDam, nPhysMin, 128));
+        nMaxPhysDamage = SATURATE_Add(nMaxPhysDamage, SATURATE_MulDiv(nSrcDam, nPhysMax, 128));
     }
     nSkillId = (D2C_Skills)pSkillsTxt->nSkillId;
     if (pSkillsTxt->nEType == 5)
@@ -3083,16 +3089,16 @@ void __fastcall SKILLDESC_DamFunc9(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Ski
         break;
     }
     nDrawColor = nElemColor;
-    nMin = (75 * nMinElemDamage) >> 8;
-    nMax = (75 * nMaxElemDamage) >> 8;
+    nMin = SATURATE_ToInt32(((int64_t)75 * nMinElemDamage) >> 8);
+    nMax = SATURATE_ToInt32(((int64_t)75 * nMaxElemDamage) >> 8);
     if (nSrcDam)
     {
         nWeaponMin = 0;
         nWeaponMax = 0;
         SKILLDESC_AddWeaponPhysDamage(pUnit, &nWeaponMin, &nWeaponMax, &nDrawColor, 0, 0, pSkill, 128, NULL, 0);
         SKILLDESC_AddItemElemDamage(pUnit, &nWeaponMin, &nWeaponMax, &nDrawColor, 0, pSkill);
-        nMin += nSrcDam * nWeaponMin / 128;
-        nMax += nSrcDam * nWeaponMax / 128;
+        nMin = SATURATE_Add(nMin, SATURATE_MulDiv(nSrcDam, nWeaponMin, 128));
+        nMax = SATURATE_Add(nMax, SATURATE_MulDiv(nSrcDam, nWeaponMax, 128));
     }
     nTextY = nY;
     nMaxClamped = nMax;
@@ -3171,8 +3177,8 @@ void __fastcall SKILLDESC_DamFunc10(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Sk
     if (pHolyShieldSkill && D2COMMON_STATES_CheckState(pUnit, STATE_HOLYSHIELD))
     {
         nHolyShieldLevel = D2COMMON_SKILLS_GetSkillLevel(pUnit, pHolyShieldSkill, 1);
-        nMinDam += D2COMMON_SKILLS_GetMinPhysDamage(pUnit, SKILL_HOLYSHIELD, nHolyShieldLevel, 1) >> 8;
-        nMaxDam += D2COMMON_SKILLS_GetMaxPhysDamage(pUnit, SKILL_HOLYSHIELD, nHolyShieldLevel, 1) >> 8;
+        nMinDam = SATURATE_Add(nMinDam, D2COMMON_SKILLS_GetMinPhysDamage(pUnit, SKILL_HOLYSHIELD, nHolyShieldLevel, 1) >> 8);
+        nMaxDam = SATURATE_Add(nMaxDam, D2COMMON_SKILLS_GetMaxPhysDamage(pUnit, SKILL_HOLYSHIELD, nHolyShieldLevel, 1) >> 8);
     }
     nDamageBonus = 0;
     nDrawColor = 0;
@@ -3188,12 +3194,12 @@ void __fastcall SKILLDESC_DamFunc10(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Sk
     nStrengthBonus = D2COMMON_ITEMS_GetStrengthBonus(pShield);
     if (nStrengthBonus)
     {
-        nDamageBonus += nStrengthBonus * D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_STRENGTH, 0) / 100;
+        nDamageBonus = SATURATE_Add(nDamageBonus, SATURATE_MulDiv(nStrengthBonus, D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_STRENGTH, 0), 100));
     }
     nDexBonus = D2COMMON_ITEMS_GetDexBonus(pShield);
     if (nDexBonus)
     {
-        nDamageBonus += nDexBonus * D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_DEXTERITY, 0) / 100;
+        nDamageBonus = SATURATE_Add(nDamageBonus, SATURATE_MulDiv(nDexBonus, D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_DEXTERITY, 0), 100));
     }
     nDamagePercent = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_DAMAGEPERCENT, 0) + nDamageBonus;
     nMinPercent = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_ITEM_MINDAMAGE_PERCENT, 0);
@@ -3213,9 +3219,9 @@ void __fastcall SKILLDESC_DamFunc10(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Sk
     //  BUG: the item damage percents are added to the product instead of joining nDamagePercent; the sibling handlers take
     //  nMinDam * (nDamagePercent + nMinPercent) / 100 (imul ecx, ebx at 0x6FB0EF1D, add ecx, edx at 0x6FB0EF23). REACHABLE: the two stats come from
     //  whatever a Paladin wears, and stock data puts them on a Smite shield itself, Alma Negra; a hundred per cent moves the line by one point.
-    nMin = (nMinPercent + nMinDam * nDamagePercent) / 100 + nMinDam;
+    nMin = SATURATE_ToInt32(((int64_t)nMinPercent + (int64_t)nMinDam * nDamagePercent) / 100 + nMinDam);
     nTextY = nY;
-    nMax = nMaxDam + (nMaxPercent + nMaxDam * nDamagePercent) / 100;
+    nMax = SATURATE_ToInt32(nMaxDam + ((int64_t)nMaxPercent + (int64_t)nMaxDam * nDamagePercent) / 100);
     nMaxClamped = nMax;
     if (nMin >= nMax)
     {
@@ -3310,8 +3316,8 @@ void __fastcall SKILLDESC_DamFunc11(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Sk
         nWeaponMax = 0;
         SKILLDESC_AddWeaponPhysDamage(pUnit, &nWeaponMin, &nWeaponMax, &nDrawColor, 0, 0, pSkill, 128, NULL, 0);
         SKILLDESC_AddItemElemDamage(pUnit, &nWeaponMin, &nWeaponMax, &nDrawColor, 0, pSkill);
-        nMinFromWeapon = nSrcDam * nWeaponMin / 128;
-        nMaxFromWeapon = nSrcDam * nWeaponMax / 128;
+        nMinFromWeapon = SATURATE_MulDiv(nSrcDam, nWeaponMin, 128);
+        nMaxFromWeapon = SATURATE_MulDiv(nSrcDam, nWeaponMax, 128);
     }
     if (D2COMMON_10434(pUnit, 1) && D2COMMON_INVENTORY_GetWieldType(pUnit, pUnit->pInventory) == 2)
     {
@@ -3342,33 +3348,33 @@ void __fastcall SKILLDESC_DamFunc11(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Sk
         nFireMastery = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_PASSIVE_FIRE_MASTERY, 0);
         if (nFireMastery)
         {
-            nFireValue += DATATBLS_ApplyRatio(nFireValue, nFireMastery, 100);
+            nFireValue = SATURATE_Add(nFireValue, DATATBLS_ApplyRatio(nFireValue, nFireMastery, 100));
         }
     }
-    nMinTotal = DATATBLS_ApplyRatio(nMinDamage, nFireValue, 100) + nMinFromWeapon;
-    nMaxTotal = DATATBLS_ApplyRatio(nMaxDamage, nFireValue, 100) + nMaxFromWeapon;
+    nMinTotal = SATURATE_Add(DATATBLS_ApplyRatio(nMinDamage, nFireValue, 100), nMinFromWeapon);
+    nMaxTotal = SATURATE_Add(DATATBLS_ApplyRatio(nMaxDamage, nFireValue, 100), nMaxFromWeapon);
     nColdValue = D2COMMON_SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[1], nSkillId, nSkillLevel);
     if (nColdValue)
     {
         nColdMastery = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_PASSIVE_COLD_MASTERY, 0);
         if (nColdMastery)
         {
-            nColdValue += DATATBLS_ApplyRatio(nColdValue, nColdMastery, 100);
+            nColdValue = SATURATE_Add(nColdValue, DATATBLS_ApplyRatio(nColdValue, nColdMastery, 100));
         }
     }
-    nMinTotal += DATATBLS_ApplyRatio(nMinDamage, nColdValue, 100);
-    nMaxTotal += DATATBLS_ApplyRatio(nMaxDamage, nColdValue, 100);
+    nMinTotal = SATURATE_Add(nMinTotal, DATATBLS_ApplyRatio(nMinDamage, nColdValue, 100));
+    nMaxTotal = SATURATE_Add(nMaxTotal, DATATBLS_ApplyRatio(nMaxDamage, nColdValue, 100));
     nLtngValue = D2COMMON_SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[2], nSkillId, nSkillLevel);
     if (nLtngValue)
     {
         nLtngMastery = D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_PASSIVE_LTNG_MASTERY, 0);
         if (nLtngMastery)
         {
-            nLtngValue += DATATBLS_ApplyRatio(nLtngValue, nLtngMastery, 100);
+            nLtngValue = SATURATE_Add(nLtngValue, DATATBLS_ApplyRatio(nLtngValue, nLtngMastery, 100));
         }
     }
-    nMinTotal += DATATBLS_ApplyRatio(nMinDamage, nLtngValue, 100);
-    nMaxTotal += DATATBLS_ApplyRatio(nMaxDamage, nLtngValue, 100);
+    nMinTotal = SATURATE_Add(nMinTotal, DATATBLS_ApplyRatio(nMinDamage, nLtngValue, 100));
+    nMaxTotal = SATURATE_Add(nMaxTotal, DATATBLS_ApplyRatio(nMaxDamage, nLtngValue, 100));
     if (!nDrawColor)
     {
         nDrawColor = UI_COLOR_BLUE;
@@ -3462,8 +3468,8 @@ void __fastcall SKILLDESC_DamFunc12(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Sk
             nPercent = -90;
         }
     }
-    nElemMin += nElemMin * nPercent / 100;
-    nElemMax += nElemMax * nPercent / 100;
+    nElemMin = SATURATE_Add(nElemMin, SATURATE_MulDiv(nElemMin, nPercent, 100));
+    nElemMax = SATURATE_Add(nElemMax, SATURATE_MulDiv(nElemMax, nPercent, 100));
     nTextY = nY;
     nMaxClamped = nElemMax;
     if (nElemMin >= nElemMax)
@@ -3528,8 +3534,8 @@ void __fastcall SKILLDESC_DamFunc14(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Sk
     {
         nBonusPercent = pSkillsTxtRec->dwParam[4];
     }
-    nMin += nMin * nBonusPercent / 100;
-    nMax += nMax * nBonusPercent / 100;
+    nMin = SATURATE_Add(nMin, SATURATE_MulDiv(nMin, nBonusPercent, 100));
+    nMax = SATURATE_Add(nMax, SATURATE_MulDiv(nMax, nBonusPercent, 100));
     SKILLDESC_AddItemElemDamage(pUnit, &nMin, &nMax, &nColor, 0, pSkill);
     nTextY = nY;
     nMaxClamped = nMax;
@@ -3595,21 +3601,21 @@ void __fastcall SKILLDESC_DamFunc15(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Sk
     {
         nColor = UI_COLOR_BLUE;
     }
-    nPhysMin += DATATBLS_ApplyRatio(nPhysMin, nTotalPercent, 100);
-    nPhysMax += DATATBLS_ApplyRatio(nPhysMax, nTotalPercent, 100);
+    nPhysMin = SATURATE_Add(nPhysMin, DATATBLS_ApplyRatio(nPhysMin, nTotalPercent, 100));
+    nPhysMax = SATURATE_Add(nPhysMax, DATATBLS_ApplyRatio(nPhysMax, nTotalPercent, 100));
     nKickMin = 0;
     nKickMax = 0;
     nKickPercent = nTotalPercent;
     D2COMMON_SKILLS_CalculateKickDamage(pUnit, &nKickMin, &nKickMax, &nKickPercent);
-    nKickMin += DATATBLS_ApplyRatio(nKickMin, nKickPercent, 100);
-    nKickMax += DATATBLS_ApplyRatio(nKickMax, nKickPercent, 100);
+    nKickMin = SATURATE_Add(nKickMin, DATATBLS_ApplyRatio(nKickMin, nKickPercent, 100));
+    nKickMax = SATURATE_Add(nKickMax, DATATBLS_ApplyRatio(nKickMax, nKickPercent, 100));
     nMinTotal = nKickMin + nPhysMin;
     nMaxTotal = nKickMax + nPhysMax;
     nElemMin = 0;
     nElemMax = 0;
     SKILLDESC_AddChargeUpElemDamage(pUnit, &nElemMin, &nElemMax, &nColor);
-    nMinTotal += nElemMin;
-    nMaxTotal += nElemMax;
+    nMinTotal = SATURATE_Add(nMinTotal, nElemMin);
+    nMaxTotal = SATURATE_Add(nMaxTotal, nElemMax);
     SKILLDESC_DrawDamageValue(pUnit, nMinTotal, nMaxTotal, nColor, nLeft, nY, nRight);
 }
 
@@ -3678,19 +3684,19 @@ void __fastcall SKILLDESC_DamFunc16(D2UnitStrc *pUnit, D2SkillStrc *pSkill, D2Sk
     nPhysMin = D2COMMON_SKILLS_GetMinPhysDamage(pUnit, (D2C_Skills)nSkillId, nSkillLevel, 0) >> 8;
     nPhysMax = D2COMMON_SKILLS_GetMaxPhysDamage(pUnit, (D2C_Skills)nSkillId, nSkillLevel, 0) >> 8;
     nChargeUpPercent = SKILLDESC_GetChargeUpDamagePercent();
-    nPhysMin += DATATBLS_ApplyRatio(nPhysMin, nChargeUpPercent, 100);
-    nPhysMax += DATATBLS_ApplyRatio(nPhysMax, nChargeUpPercent, 100);
+    nPhysMin = SATURATE_Add(nPhysMin, DATATBLS_ApplyRatio(nPhysMin, nChargeUpPercent, 100));
+    nPhysMax = SATURATE_Add(nPhysMax, DATATBLS_ApplyRatio(nPhysMax, nChargeUpPercent, 100));
     nKickMin = 0;
     nKickMax = 0;
     nKickPercent = nChargeUpPercent;
     D2COMMON_SKILLS_CalculateKickDamage(pUnit, &nKickMin, &nKickMax, &nKickPercent);
-    nKickMin += DATATBLS_ApplyRatio(nKickMin, nKickPercent, 100);
-    nKickMax += DATATBLS_ApplyRatio(nKickMax, nKickPercent, 100);
+    nKickMin = SATURATE_Add(nKickMin, DATATBLS_ApplyRatio(nKickMin, nKickPercent, 100));
+    nKickMax = SATURATE_Add(nKickMax, DATATBLS_ApplyRatio(nKickMax, nKickPercent, 100));
     nMinTotal = nKickMin + nPhysMin;
     nMaxTotal = nKickMax + nPhysMax;
     nFormula = D2COMMON_SKILLS_EvaluateSkillFormula(pUnit, pSkillsTxt->dwCalc[0], (D2C_Skills)nSkillId, nSkillLevel);
-    nMinTotal += DATATBLS_ApplyRatio(nMinTotal, nFormula, 100);
-    nMaxTotal += DATATBLS_ApplyRatio(nMaxTotal, nFormula, 100);
+    nMinTotal = SATURATE_Add(nMinTotal, DATATBLS_ApplyRatio(nMinTotal, nFormula, 100));
+    nMaxTotal = SATURATE_Add(nMaxTotal, DATATBLS_ApplyRatio(nMaxTotal, nFormula, 100));
     pInventory = pUnit->pInventory;
     if (pInventory)
     {
@@ -4216,7 +4222,8 @@ int32_t __fastcall SKILLDESC_BuildDescLine(D2UnitStrc *pPlayer, struct Unicode *
             {
                 goto RETURN_ONE;
             }
-            nSummonLife = nCalcB + nCalcA * ((tSummon.nMinHP + tSummon.nMaxHP) / 2) / 100 + (tSummon.nMinHP + tSummon.nMaxHP) / 2;
+            //  DIFFERENCE: overflow fix; the summon's life is computed in 64 bits and saturated (Saturate.h).
+            nSummonLife = SATURATE_ToInt32(nCalcB + (int64_t)nCalcA * (((int64_t)tSummon.nMinHP + tSummon.nMaxHP) / 2) / 100 + ((int64_t)tSummon.nMinHP + tSummon.nMaxHP) / 2);
             if (!nSummonLife)
             {
                 goto RETURN_ONE;
@@ -4238,7 +4245,7 @@ int32_t __fastcall SKILLDESC_BuildDescLine(D2UnitStrc *pPlayer, struct Unicode *
         nMin = D2COMMON_SKILLS_GetMinElemDamage(pPlayer, nSkillId, nSkillLevel, 1);
         nMax = (nFrames * D2COMMON_SKILLS_GetMaxElemDamage(pPlayer, nSkillId, nSkillLevel, 1)) >> 8;
         SKILLDESC_AppendFramesAsSeconds(pwszText, STR_IDX_11022_StrSkill63Patch, nFrames, 0);
-        SKILLDESC_AppendElemDamageLine(pwszText, (nFrames * nMin) >> 8, nMax, pSkillsTxt->nEType, 0);
+        SKILLDESC_AppendElemDamageLine(pwszText, SATURATE_ToInt32(((int64_t)nFrames * nMin) >> 8), nMax, pSkillsTxt->nEType, 0);
         return 1;
 
     case 0xF:   //  "A: B"
@@ -4579,13 +4586,13 @@ int32_t __fastcall SKILLDESC_BuildDescLine(D2UnitStrc *pPlayer, struct Unicode *
             {
                 if (pStat[i] == STAT_DAMAGEPERCENT)
                 {
-                    nPercent += D2COMMON_SKILLS_EvaluateSkillFormula(pPlayer, pStatCalc[i], nSkillId, nSkillLevel);
+                    nPercent = SATURATE_Add(nPercent, D2COMMON_SKILLS_EvaluateSkillFormula(pPlayer, pStatCalc[i], nSkillId, nSkillLevel));
                 }
                 if (pStat[i] == STAT_ITEM_NORMALDAMAGE)
                 {
                     nValue = D2COMMON_SKILLS_EvaluateSkillFormula(pPlayer, pStatCalc[i], nSkillId, nSkillLevel);
-                    nMin += nValue;
-                    nMax += nValue;
+                    nMin = SATURATE_Add(nMin, nValue);
+                    nMax = SATURATE_Add(nMax, nValue);
                 }
             }
             pStatCalc = pSkillsTxt->dwPassiveCalc;
@@ -4594,13 +4601,13 @@ int32_t __fastcall SKILLDESC_BuildDescLine(D2UnitStrc *pPlayer, struct Unicode *
             {
                 if (pStat[i] == STAT_DAMAGEPERCENT)
                 {
-                    nPercent += D2COMMON_SKILLS_EvaluateSkillFormula(pPlayer, pStatCalc[i], nSkillId, nSkillLevel);
+                    nPercent = SATURATE_Add(nPercent, D2COMMON_SKILLS_EvaluateSkillFormula(pPlayer, pStatCalc[i], nSkillId, nSkillLevel));
                 }
                 if (pStat[i] == STAT_ITEM_NORMALDAMAGE)
                 {
                     nValue = D2COMMON_SKILLS_EvaluateSkillFormula(pPlayer, pStatCalc[i], nSkillId, nSkillLevel);
-                    nMin += nValue;
-                    nMax += nValue;
+                    nMin = SATURATE_Add(nMin, nValue);
+                    nMax = SATURATE_Add(nMax, nValue);
                 }
             }
             if (nPercent)
@@ -4609,8 +4616,8 @@ int32_t __fastcall SKILLDESC_BuildDescLine(D2UnitStrc *pPlayer, struct Unicode *
                 {
                     nPercent = -90;
                 }
-                nMin += DATATBLS_ApplyRatio(nMin, nPercent, 100);
-                nMax += DATATBLS_ApplyRatio(nMax, nPercent, 100);
+                nMin = SATURATE_Add(nMin, DATATBLS_ApplyRatio(nMin, nPercent, 100));
+                nMax = SATURATE_Add(nMax, DATATBLS_ApplyRatio(nMax, nPercent, 100));
             }
             SKILLDESC_AppendElemDamageLine(pwszText, nMin, nMax, 0, STR_IDX_4256_StrSkill4);
             return 1;
@@ -4682,7 +4689,7 @@ int32_t __fastcall SKILLDESC_BuildDescLine(D2UnitStrc *pPlayer, struct Unicode *
             {
                 if (pStat[i] == STAT_DAMAGEPERCENT)
                 {
-                    nStatBonus += D2COMMON_SKILLS_EvaluateSkillFormula(pPlayer, pStatCalc[i], nSkillId, nSkillLevel);
+                    nStatBonus = SATURATE_Add(nStatBonus, D2COMMON_SKILLS_EvaluateSkillFormula(pPlayer, pStatCalc[i], nSkillId, nSkillLevel));
                 }
             }
             pStatCalc = pSkillsTxt->dwPassiveCalc;
@@ -4691,7 +4698,7 @@ int32_t __fastcall SKILLDESC_BuildDescLine(D2UnitStrc *pPlayer, struct Unicode *
             {
                 if (pStat[i] == STAT_DAMAGEPERCENT)
                 {
-                    nStatBonus += D2COMMON_SKILLS_EvaluateSkillFormula(pPlayer, pStatCalc[i], nSkillId, nSkillLevel);
+                    nStatBonus = SATURATE_Add(nStatBonus, D2COMMON_SKILLS_EvaluateSkillFormula(pPlayer, pStatCalc[i], nSkillId, nSkillLevel));
                 }
             }
             nMin = tSummon.nA1MinD;
@@ -4702,8 +4709,8 @@ int32_t __fastcall SKILLDESC_BuildDescLine(D2UnitStrc *pPlayer, struct Unicode *
                 {
                     nStatBonus = -90;
                 }
-                nMin += DATATBLS_ApplyRatio(nMin, nStatBonus, 100);
-                nMax += DATATBLS_ApplyRatio(nMax, nStatBonus, 100);
+                nMin = SATURATE_Add(nMin, DATATBLS_ApplyRatio(nMin, nStatBonus, 100));
+                nMax = SATURATE_Add(nMax, DATATBLS_ApplyRatio(nMax, nStatBonus, 100));
             }
             SKILLDESC_AppendElemDamageLine(pwszText, nMin, nMax, 0, STR_IDX_4256_StrSkill4);
             return 1;
@@ -5852,8 +5859,8 @@ int32_t __fastcall SKILLDESC_AppendPhysDamageLine(D2UnitStrc *pUnit, struct Unic
 
     nMin = D2COMMON_SKILLS_GetMinPhysDamage(pUnit, nSkillId, nSkillLevel, 0) >> 8;
     nMax = D2COMMON_SKILLS_GetMaxPhysDamage(pUnit, nSkillId, nSkillLevel, 0) >> 8;
-    nMin = nMin + DATATBLS_ApplyRatio(nMin, nPercentBonus, 100) + nFlatBonus;
-    nMax = nMax + DATATBLS_ApplyRatio(nMax, nPercentBonus, 100) + nFlatBonus;
+    nMin = SATURATE_ToInt32((int64_t)nMin + DATATBLS_ApplyRatio(nMin, nPercentBonus, 100) + nFlatBonus);
+    nMax = SATURATE_ToInt32((int64_t)nMax + DATATBLS_ApplyRatio(nMax, nPercentBonus, 100) + nFlatBonus);
     if (!nMin && !nMax)
     {
         return 0;

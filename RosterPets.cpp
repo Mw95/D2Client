@@ -2,6 +2,7 @@
 
 #include "DLLmain.h"
 #include "D2Client.h"
+#include "Saturate.h"
 #include "RosterPets.h"
 
 //  RosterPets.cpp -- the client's list of pets in D2Client.dll 1.10: every summon and hireling the server has announced, the local player's
@@ -551,7 +552,9 @@ void __fastcall ROSTERPETS_UpdateLifeAndArea(uint32_t dwPetUnitId, int32_t nLife
         if (pUnit)
         {
             nMaxLife = D2COMMON_STATLIST_GetMaxLifeFromUnit(pUnit);
-            D2COMMON_STATLIST_SetUnitStat(pUnit, STAT_HITPOINTS, (int32_t)((uint32_t)nMaxLife * (uint32_t)nLifePercent) / 100, 0);
+            //  DIFFERENCE: overflow fix. The original multiplies the 24.8 maximum by the percentage in 32 bits, so a hireling with 83,887 life or
+            //  more got a negative or wrapped life; the product is now 64-bit (Saturate.h).
+            D2COMMON_STATLIST_SetUnitStat(pUnit, STAT_HITPOINTS, SATURATE_MulDiv(nMaxLife, nLifePercent, 100), 0);
         }
     }
 }

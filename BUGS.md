@@ -16,6 +16,9 @@ this file, and it is why the last section exists.
   that a bug in the original is **reproduced and written down, never fixed** —
   a rewrite that quietly corrects the original is a different program that
   happens to compile. Every entry below is reproduced in the `.cpp` files unless the entry says otherwise and says why.
+  **The one exception is life and damage overflow** (32-bit arithmetic that
+  wraps on large life or damage values): those are fixed, not reproduced, and
+  each fix is listed in `OVERFLOW_FIXES.md`.
 * **It is a summary.** Each entry gives its addresses and names the file whose
   code it concerns.
 
@@ -10478,7 +10481,11 @@ value unmasked, and their packet fields were not traced; a wrap needs
 a hireling's real life, which would need 83886 hit points or more. The
 function answers only for a unit drawn as a monster.
 
-Reproduced: written unsigned, which wraps the same way and is defined.
+**Not reproduced: fixed.** Life and damage overflows are the one class of
+defect this rewrite corrects, at the project owner's direction (2026-11-17):
+the product is taken in 64 bits (`Saturate.h`), marked `DIFFERENCE: overflow
+fix` in Gfx.cpp. Below the wrap the percentage is the original's. See
+`OVERFLOW_FIXES.md`.
 
 ## The green-blood palette is fetched for a blood overlay and thrown away
 

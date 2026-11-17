@@ -345,6 +345,7 @@
     <ClInclude Include="Restart.h" />
     <ClInclude Include="Roster.h" />
     <ClInclude Include="RosterPets.h" />
+    <ClInclude Include="Saturate.h" />
     <ClInclude Include="SCmd.h" />
     <ClInclude Include="scroll.h" />
     <ClInclude Include="Select.h" />

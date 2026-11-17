@@ -17,6 +17,9 @@ the original does.
   `BUGS.md` holds every defect found, each with the measurement that settled it and its verdict.
 * `DIFFERENCE:` marks a place where the rewrite does not do exactly what the original does -- where a faithful copy
   would be undefined behaviour in C++, the rewrite takes the defined program and says what differs.
+* `DIFFERENCE: overflow fix` marks the one class of the original's bugs that the rewrite fixes instead of reproducing:
+  life and damage arithmetic that wraps in 32 bits. Those products and sums are done in 64 bits and saturated
+  (`Saturate.h`); values that did not wrap are unchanged. `OVERFLOW_FIXES.md` lists every site.
 * `D2ExpRes <SiteName>` marks a line where Dav92's D2ExpRes resolution patch hooks the original, for whoever ports
   that patch onto this source.
 * One `.cpp` per unit of the original. Where an assert of the original names its source file, the file is named after

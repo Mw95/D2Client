@@ -2,6 +2,7 @@
 
 #include "DLLmain.h"
 #include "D2Client.h"
+#include "Saturate.h"
 #include "Game.h"
 #include "CoreArchive.h"
 #include "ui.h"
@@ -508,7 +509,9 @@ int32_t __fastcall UIPANELS_GetUnitLifeFill128(D2UnitStrc *pUnit)
         nMaxLife = D2COMMON_STATLIST_GetMaxLifeFromUnit(pUnit);
         if (nMaxLife)
         {
-            nFill128 = (D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_HITPOINTS, 0) << 7) / nMaxLife;
+            //  DIFFERENCE: overflow fix. The original shifts the 24.8 life left by 7 in 32 bits, which wraps from 65,536 life (a hireling's real
+            //  life); the product is now 64-bit (Saturate.h).
+            nFill128 = SATURATE_MulDiv(D2COMMON_STATLIST_UnitGetStatValue(pUnit, STAT_HITPOINTS, 0), 128, nMaxLife);
             if (nFill128 <= 2)
                 return 2;
         }

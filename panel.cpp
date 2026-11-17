@@ -2,6 +2,7 @@
 
 #include "DLLmain.h"
 #include "D2Client.h"
+#include "Saturate.h"
 #include "Game.h"
 #include "CoreArchive.h"
 #include "Party.h"
@@ -789,7 +790,9 @@ void __cdecl PANEL_DrawHealthGlobe()
         return;
     }
 
-    nLifeLines = 80 * nValue / nMax;
+    //  DIFFERENCE: overflow fix. The original takes `80 * nValue` in 32 bits on the 24.8 life, which wraps from 104,858 life and drew an empty or
+    //  negative globe; the product is now 64-bit (Saturate.h).
+    nLifeLines = SATURATE_MulDiv(nValue, 80, nMax);
     if (nLifeLines > 0 && nLifeLines <= 2)
     {
         pUnit = CUNIT_GetPlayer();
@@ -806,7 +809,8 @@ void __cdecl PANEL_DrawHealthGlobe()
 
     if (D2COMMON_STATES_CheckState(CUNIT_GetPlayer(), STATE_HEALTHPOT))
     {
-        nRegenLines = 80 * D2COMMON_STATLIST_UnitGetStatValue(CUNIT_GetPlayer(), STAT_HPREGEN, 0) / 100;
+        //  DIFFERENCE: overflow fix; the product is 64-bit, so a large regeneration caps at 80 lines instead of wrapping.
+        nRegenLines = SATURATE_MulDiv(D2COMMON_STATLIST_UnitGetStatValue(CUNIT_GetPlayer(), STAT_HPREGEN, 0), 80, 100);
         if (nRegenLines > 80)
         {
             nRegenLines = 80;
@@ -866,7 +870,8 @@ void __cdecl PANEL_DrawManaGlobe()
     {
         nValue = nMax;
     }
-    nManaLines = 80 * nValue / nMax;
+    //  DIFFERENCE: overflow fix, as in the health globe: from 104,858 mana the original's `80 * nValue` wrapped.
+    nManaLines = SATURATE_MulDiv(nValue, 80, nMax);
 
     memset(&tCelContext, 0, sizeof(tCelContext));
     tCelContext.nDirection = 0;
@@ -875,7 +880,8 @@ void __cdecl PANEL_DrawManaGlobe()
 
     if (D2COMMON_STATES_CheckState(CUNIT_GetPlayer(), STATE_MANAPOT))
     {
-        nRecoveryLines = 80 * D2COMMON_STATLIST_UnitGetStatValue(CUNIT_GetPlayer(), STAT_MANARECOVERY, 0) / 100;
+        //  DIFFERENCE: overflow fix, as for the regeneration band.
+        nRecoveryLines = SATURATE_MulDiv(D2COMMON_STATLIST_UnitGetStatValue(CUNIT_GetPlayer(), STAT_MANARECOVERY, 0), 80, 100);
         if (nRecoveryLines > 80)
         {
             nRecoveryLines = 80;

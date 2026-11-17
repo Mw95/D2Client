@@ -2,6 +2,7 @@
 
 #include "DLLmain.h"
 #include "D2Client.h"
+#include "Saturate.h"
 #include "WINMAIN.h"
 #include "CoreArchive.h"
 #include "ui.h"
@@ -7603,7 +7604,7 @@ void __fastcall INV_CalcElementalDamageRange(D2UnitStrc *pTarget, D2UnitStrc *pI
         nBaseTime = 0;
         nPeriodOfDay = D2COMMON_ENVIRONMENT_GetPeriodOfDayFromAct(pMergeTarget->pDrlgAct, &nBaseTime);
         nAdjust = D2COMMON_ITEMMODS_GetByTimeAdjustment(nAmount, nPeriodOfDay, nBaseTime, NULL, NULL, NULL);
-        nMaxDamage += nAdjust;
+        nMaxDamage = SATURATE_Add(nMaxDamage, nAdjust);
         if (nAdjust)
             *pbAdjusted = 1;
     }
@@ -7615,7 +7616,7 @@ void __fastcall INV_CalcElementalDamageRange(D2UnitStrc *pTarget, D2UnitStrc *pI
         nBaseTime = 0;
         nPeriodOfDay = D2COMMON_ENVIRONMENT_GetPeriodOfDayFromAct(pMergeTarget->pDrlgAct, &nBaseTime);
         nAdjust = D2COMMON_ITEMMODS_GetByTimeAdjustment(nAmount, nPeriodOfDay, nBaseTime, NULL, NULL, NULL);
-        nMaxDamage += DATATBLS_ApplyRatio(nMaxDamage, nAdjust, 100);
+        nMaxDamage = SATURATE_Add(nMaxDamage, DATATBLS_ApplyRatio(nMaxDamage, nAdjust, 100));
         if (nAdjust)
             *pbAdjusted = 1;
     }
@@ -7734,8 +7735,8 @@ void __fastcall INV_AppendSkillDamageText(D2UnitStrc *pItem, Unicode *wszOut, D2
         if (pSkill && D2COMMON_STATES_CheckState(pPlayer, STATE_HOLYSHIELD))
         {
             nSkillLevel = D2COMMON_SKILLS_GetSkillLevel(pPlayer, pSkill, 1);
-            nMinDam += D2COMMON_SKILLS_GetMinPhysDamage(pPlayer, SKILL_HOLYSHIELD, nSkillLevel, 1) >> 8;
-            nMaxDam += D2COMMON_SKILLS_GetMaxPhysDamage(pPlayer, SKILL_HOLYSHIELD, nSkillLevel, 1) >> 8;
+            nMinDam = SATURATE_Add(nMinDam, D2COMMON_SKILLS_GetMinPhysDamage(pPlayer, SKILL_HOLYSHIELD, nSkillLevel, 1) >> 8);
+            nMaxDam = SATURATE_Add(nMaxDam, D2COMMON_SKILLS_GetMaxPhysDamage(pPlayer, SKILL_HOLYSHIELD, nSkillLevel, 1) >> 8);
         }
     }
     else
@@ -9833,8 +9834,8 @@ void __fastcall INV_AppendElementalDamageText(D2UnitStrc *pItem, Unicode *wszOut
             break;
         }
 
-        nMinDamage += D2COMMON_MISSILE_GetMinDamage(NULL, pPlayer, nMissileId, 1);
-        nMaxRaw = D2COMMON_MISSILE_GetMaxDamage(NULL, pPlayer, nMissileId, 1) + nMaxDamage;
+        nMinDamage = SATURATE_Add(nMinDamage, D2COMMON_MISSILE_GetMinDamage(NULL, pPlayer, nMissileId, 1));
+        nMaxRaw = SATURATE_Add(D2COMMON_MISSILE_GetMaxDamage(NULL, pPlayer, nMissileId, 1), nMaxDamage);
         nMinDamage >>= 8;
         nMaxDamage = nMaxRaw >> 8;
         if (nMaxDamage <= nMinDamage)
@@ -10178,12 +10179,12 @@ void __fastcall INV_MercInvDrawStatRows(D2UnitStrc *pMerc)
                 nStatBonus = D2COMMON_ITEMS_GetStrengthBonus(pRightArmItem);
                 if (nStatBonus)
                 {
-                    nDamagePercent += nStatBonus * D2COMMON_STATLIST_UnitGetStatValue(pMerc, STAT_STRENGTH, 0) / 100;
+                    nDamagePercent = SATURATE_Add(nDamagePercent, SATURATE_MulDiv(nStatBonus, D2COMMON_STATLIST_UnitGetStatValue(pMerc, STAT_STRENGTH, 0), 100));
                 }
                 nStatBonus = D2COMMON_ITEMS_GetDexBonus(pRightArmItem);
                 if (nStatBonus)
                 {
-                    nDamagePercent += nStatBonus * D2COMMON_STATLIST_UnitGetStatValue(pMerc, STAT_DEXTERITY, 0) / 100;
+                    nDamagePercent = SATURATE_Add(nDamagePercent, SATURATE_MulDiv(nStatBonus, D2COMMON_STATLIST_UnitGetStatValue(pMerc, STAT_DEXTERITY, 0), 100));
                 }
                 nDamagePercent += D2COMMON_SKILLS_GetWeaponMasteryBonus(pMerc, pRightArmItem, NULL, 1);
                 nNormalDamage = D2COMMON_STATLIST_UnitGetItemStatOrSkillStatValue(pRightArmItem, STAT_ITEM_NORMALDAMAGE, 0);
@@ -10207,8 +10208,11 @@ void __fastcall INV_MercInvDrawStatRows(D2UnitStrc *pMerc)
                 STAT_COLDMINDAM,  STAT_COLDMAXDAM,  3,
             };
 
-            nMinTotal = nNormalDamage + nValue * (nMinPercent + nDamagePercent + 100) / 100;
-            nMaxTotal = nNormalDamage + nMaxDamage * (nMaxPercent + nDamagePercent + 100) / 100;
+            //  DIFFERENCE: overflow fix. The original computes these totals in 32 bits, so a large damage times a large percentage, or the sum of
+            //  the elemental and poison damages below, wrapped to a negative or small number on the hireling's page. Each product and sum is
+            //  64-bit and saturated (Saturate.h); below the wrap the numbers are the original's.
+            nMinTotal = SATURATE_ToInt32(nNormalDamage + (int64_t)nValue * ((int64_t)nMinPercent + nDamagePercent + 100) / 100);
+            nMaxTotal = SATURATE_ToInt32(nNormalDamage + (int64_t)nMaxDamage * ((int64_t)nMaxPercent + nDamagePercent + 100) / 100);
             for (iElem = 0; iElem < 12; iElem += 3)
             {
                 nElemMin = D2COMMON_STATLIST_UnitGetStatValue(pMerc, (D2C_ItemStats)anElementalStats[iElem], 0);
@@ -10217,8 +10221,8 @@ void __fastcall INV_MercInvDrawStatRows(D2UnitStrc *pMerc)
                 {
                     nColor = anElementalStats[iElem + 2];
                 }
-                nMaxTotal += nElemMax;
-                nMinTotal += nElemMin;
+                nMaxTotal = SATURATE_Add(nMaxTotal, nElemMax);
+                nMinTotal = SATURATE_Add(nMinTotal, nElemMin);
             }
 
             nPoisonMin = D2COMMON_STATLIST_UnitGetStatValue(pMerc, STAT_POISONMINDAM, 0);
@@ -10235,9 +10239,9 @@ void __fastcall INV_MercInvDrawStatRows(D2UnitStrc *pMerc)
                     }
                     nPoisonLength = D2COMMON_STATLIST_UnitGetStatValue(pMerc, STAT_POISONLENGTH, 0) / nPoisonCount;
                 }
-                nMinTotal += (nPoisonMin * nPoisonLength) >> 8;
+                nMinTotal = SATURATE_ToInt32(nMinTotal + (((int64_t)nPoisonMin * nPoisonLength) >> 8));
                 nColor = 2;
-                nMaxTotal += (nPoisonMax * nPoisonLength) >> 8;
+                nMaxTotal = SATURATE_ToInt32(nMaxTotal + (((int64_t)nPoisonMax * nPoisonLength) >> 8));
             }
 
             STORM_SStrPrintf(szText, 0x80u, "%d-%d", nMinTotal, nMaxTotal);

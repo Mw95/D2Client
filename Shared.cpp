@@ -2,6 +2,7 @@
 
 #include "DLLmain.h"
 #include "D2Client.h"
+#include "Saturate.h"
 
 //  Shared.cpp -- not one of the original's files. It holds the functions that cannot be placed in a single module: the out-of-line bodies of
 //  inline functions that the original inlines in several units (most of the functions here), and orphans that lie between two units with
@@ -351,9 +352,11 @@ void __cdecl LANG_FormatString(Unicode *wszOut, const Unicode *wszFormat, ...)
 //  The four branches are not redundant and must not be collapsed into one 64-bit multiply. Two of them divide before multiplying, which
 //  truncates: with nValue=30, nMultiplier=0x20000, nDivisor=7 the shortcut gives 30 * (131072 / 7) = 30 * 18724 = 561720 against an exact
 //  561737. The game's numbers depend on it.
-//  BUG: the guard does not prove safety: nValue is bounded by 0x100000 (cmp ecx, 100000h, 0x6FAE5BE3) and nMultiplier by 0x10000
-//  (cmp edi, 10000h, 0x6FAE5C01), and 0x100000 * 0x10000 is 2^36, so the "both small" fast path can still overflow a 32-bit multiply. It is a
-//  heuristic about typical magnitudes.
+//  The guard does not prove safety in the original: nValue is bounded by 0x100000 (cmp ecx, 100000h, 0x6FAE5BE3) and nMultiplier by 0x10000
+//  (cmp edi, 10000h, 0x6FAE5C01), and 0x100000 * 0x10000 is 2^36, so the "both small" fast path can overflow a 32-bit multiply; the other two
+//  multiplying branches can too, and the last truncates a 64-bit quotient to 32 bits.
+//  DIFFERENCE: overflow fix. The four branches are kept, so every result that did not wrap is the original's, but each product is taken in 64
+//  bits and the result saturated to the int32 range (Saturate.h). D2MOO's D2Common and D2Game copies make the same change.
 int32_t __fastcall DATATBLS_ApplyRatio(int32_t nValue, int32_t nMultiplier, int32_t nDivisor)
 {
     if (!nDivisor)
@@ -365,19 +368,19 @@ int32_t __fastcall DATATBLS_ApplyRatio(int32_t nValue, int32_t nMultiplier, int3
     {
         if (nMultiplier <= 0x10000)
         {
-            return nMultiplier * nValue / nDivisor;
+            return SATURATE_ToInt32((int64_t)nMultiplier * nValue / nDivisor);
         }
         if (nDivisor <= nMultiplier >> 4)
         {
-            return nValue * (nMultiplier / nDivisor);
+            return SATURATE_ToInt32((int64_t)nValue * (nMultiplier / nDivisor));
         }
     }
     else if (nDivisor <= nValue >> 4)
     {
-        return nMultiplier * (nValue / nDivisor);
+        return SATURATE_ToInt32((int64_t)nMultiplier * (nValue / nDivisor));
     }
 
-    return (int32_t)((int64_t)nMultiplier * (int64_t)nValue / nDivisor);
+    return SATURATE_ToInt32((int64_t)nMultiplier * (int64_t)nValue / nDivisor);
 }
 
 
